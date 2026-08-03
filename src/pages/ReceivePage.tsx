@@ -345,7 +345,7 @@ export const ReceivePage: React.FC<ReceivePageProps> = ({ setActiveTab }) => {
             <p className="text-xs text-neutral-400 max-w-md mx-auto mb-4">
               Разрешите доступ к камере и наведите её на QR-код на экране отправителя.
             </p>
-            <div className="text-xs font-mono text-emerald-400 mb-4">Raptor Fast · 4 QR · автоматическое восстановление</div>
+            <div className="text-xs font-mono text-emerald-400 mb-4">RaptorQ · параметры определяются автоматически</div>
           </div>
 
           {error && (
@@ -391,7 +391,7 @@ export const ReceivePage: React.FC<ReceivePageProps> = ({ setActiveTab }) => {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <SignalQualityBadge level={signalLevel} confidence={detected ? 1 : undefined} />
-              <span className="text-xs font-mono text-neutral-400">4× QR v30-L · RaptorQ</span>
+              <span className="text-xs font-mono text-neutral-400">QR · RaptorQ</span>
             </div>
             <button
               type="button"

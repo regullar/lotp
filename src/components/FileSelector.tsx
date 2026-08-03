@@ -1,6 +1,7 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState } from 'react';
 import { Upload, FileText, Trash2, Lock } from 'lucide-react';
 import { useI18n } from '../hooks/useI18n';
+import { DEFAULT_RAPTOR_SETTINGS, getRaptorCapacity, type RaptorSettings } from '../protocol/raptorTransport';
 
 interface FileSelectorProps {
   files: File[];
@@ -10,7 +11,7 @@ interface FileSelectorProps {
   onEncryptionToggle: (encrypted: boolean) => void;
   password: string;
   onPasswordChange: (pw: string) => void;
-  onStart: () => void;
+  onStart: (settings: RaptorSettings) => void;
 }
 
 const formatSize = (bytes: number) => {
@@ -31,10 +32,11 @@ export const FileSelector: React.FC<FileSelectorProps> = ({
 }) => {
   const { t } = useI18n();
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const [settings, setSettings] = useState(DEFAULT_RAPTOR_SETTINGS);
 
   const totalSize = files.reduce((acc, f) => acc + f.size, 0);
 
-  const estSpeedBps = 160 * 1024;
+  const estSpeedBps = settings.fps * settings.parallel * getRaptorCapacity(settings.version).sourceBytes * 0.75;
   const estSeconds = Math.max(2, Math.ceil(totalSize / estSpeedBps));
 
   const handleDrop = (e: React.DragEvent) => {
@@ -106,9 +108,57 @@ export const FileSelector: React.FC<FileSelectorProps> = ({
         </div>
       )}
 
-      <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4">
-        <div className="font-bold text-sm text-white">Raptor Fast</div>
-        <div className="mt-1 text-xs text-neutral-400">4 QR · 30 FPS · RaptorQ 20% · автоматическое сжатие</div>
+      <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 space-y-4">
+        <div>
+          <div className="font-bold text-sm text-white">RaptorQ · настраиваемый</div>
+          <div className="mt-1 text-xs text-neutral-400">По умолчанию — максимально читаемый режим для телефона.</div>
+        </div>
+
+        <label className="block text-xs text-neutral-300">
+          <span className="flex justify-between"><span>Плотность QR</span><b>v{settings.version}</b></span>
+          <input
+            type="range"
+            min={10}
+            max={30}
+            step={5}
+            value={settings.version}
+            onChange={(event) => setSettings({ ...settings, version: Number(event.target.value) })}
+            className="mt-2 w-full accent-emerald-500"
+          />
+          <span className="mt-1 flex justify-between text-[10px] text-neutral-500"><span>проще считать</span><span>больше данных</span></span>
+        </label>
+
+        <label className="block text-xs text-neutral-300">
+          <span className="flex justify-between"><span>Скорость кадров</span><b>{settings.fps} FPS</b></span>
+          <input
+            type="range"
+            min={5}
+            max={30}
+            step={5}
+            value={settings.fps}
+            onChange={(event) => setSettings({ ...settings, fps: Number(event.target.value) })}
+            className="mt-2 w-full accent-cyan-500"
+          />
+          <span className="mt-1 flex justify-between text-[10px] text-neutral-500"><span>стабильнее</span><span>быстрее</span></span>
+        </label>
+
+        <label className="block text-xs text-neutral-300">
+          <span className="flex justify-between"><span>QR одновременно</span><b>{settings.parallel}</b></span>
+          <input
+            type="range"
+            min={1}
+            max={4}
+            step={3}
+            value={settings.parallel}
+            onChange={(event) => setSettings({ ...settings, parallel: Number(event.target.value) as 1 | 4 })}
+            className="mt-2 w-full accent-amber-500"
+          />
+          <span className="mt-1 flex justify-between text-[10px] text-neutral-500"><span>1 — надёжно</span><span>4 — быстро</span></span>
+        </label>
+
+        <div className="text-[11px] font-mono text-emerald-300">
+          {settings.parallel} QR · v{settings.version}-L · {settings.fps} FPS · RaptorQ 20%
+        </div>
       </div>
 
       <div className="p-4 rounded-xl border border-neutral-800 bg-neutral-900/60 space-y-3">
@@ -144,7 +194,7 @@ export const FileSelector: React.FC<FileSelectorProps> = ({
         <button
           type="button"
           disabled={files.length === 0 || (isEncrypted && !password)}
-          onClick={onStart}
+          onClick={() => onStart(settings)}
           className="px-6 py-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 disabled:cursor-not-allowed text-black font-bold text-sm tracking-wide shadow-lg shadow-emerald-500/20 transition-colors"
         >
           {t.startTransmission}

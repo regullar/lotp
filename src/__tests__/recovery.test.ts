@@ -7,8 +7,9 @@ import { renderQRCodeImageData } from '@raptorqr/core/qr/qr_encoder_browser';
 import {
   createRaptorDecoder,
   createRaptorTransfer,
+  DEFAULT_RAPTOR_SETTINGS,
   parseRaptorFrame,
-  RAPTOR_MODE,
+  RAPTOR_ECC_LEVEL,
 } from '../protocol/raptorTransport';
 
 class TestImageData {
@@ -56,33 +57,39 @@ describe('Raptor Fast recovery', () => {
     expect(restored).toEqual(source);
   });
 
-  it('renders and decodes four binary QR codes from one frame', async () => {
+  it('renders and decodes both reliable and fast layouts', async () => {
     const source = Uint8Array.from({ length: 20_000 }, (_, index) => (index * 37) & 0xff);
-    const transfer = await createRaptorTransfer(source, 1234);
-    const packets = transfer.packets.slice(0, 4);
-    const tiles = await Promise.all(packets.map((packet) =>
-      renderQRCodeImageData(packet, RAPTOR_MODE.version, RAPTOR_MODE.eccLevel, RAPTOR_MODE.scale)
-    ));
-    const tileSide = tiles[0].width;
-    const side = tileSide * 2;
-    const pixels = new Uint8ClampedArray(side * side * 4);
-    tiles.forEach((tile, index) => {
-      const x = index % 2 * tileSide;
-      const y = Math.floor(index / 2) * tileSide;
-      for (let row = 0; row < tileSide; row++) {
-        pixels.set(
-          tile.data.subarray(row * tileSide * 4, (row + 1) * tileSide * 4),
-          ((y + row) * side + x) * 4,
-        );
-      }
-    });
+    const modes = [DEFAULT_RAPTOR_SETTINGS, { ...DEFAULT_RAPTOR_SETTINGS, parallel: 4 as const }];
 
-    const decoded = await decodeQRCodesFromCanvas(
-      new TestImageData(pixels, side, side) as ImageData,
-      { maxSymbols: 4, tryDownscale: false },
-    );
-    const expected = packets.map((packet) => Array.from(packet)).sort();
-    const actual = decoded.map((result) => Array.from(result.bytes)).sort();
-    expect(actual).toEqual(expected);
+    for (const settings of modes) {
+      const transfer = await createRaptorTransfer(source, 1234, settings);
+      const packets = transfer.packets.slice(0, settings.parallel);
+      const grid = settings.parallel === 1 ? 1 : 2;
+      const scale = Math.max(2, Math.ceil(580 / grid / (17 + settings.version * 4 + 8)));
+      const tiles = await Promise.all(packets.map((packet) =>
+        renderQRCodeImageData(packet, settings.version, RAPTOR_ECC_LEVEL, scale)
+      ));
+      const tileSide = tiles[0].width;
+      const side = tileSide * grid;
+      const pixels = new Uint8ClampedArray(side * side * 4);
+      tiles.forEach((tile, index) => {
+        const x = index % grid * tileSide;
+        const y = Math.floor(index / grid) * tileSide;
+        for (let row = 0; row < tileSide; row++) {
+          pixels.set(
+            tile.data.subarray(row * tileSide * 4, (row + 1) * tileSide * 4),
+            ((y + row) * side + x) * 4,
+          );
+        }
+      });
+
+      const decoded = await decodeQRCodesFromCanvas(
+        new TestImageData(pixels, side, side) as ImageData,
+        { maxSymbols: 4, tryDownscale: false },
+      );
+      const expected = packets.map((packet) => Array.from(packet)).sort();
+      const actual = decoded.map((result) => Array.from(result.bytes)).sort();
+      expect(actual).toEqual(expected);
+    }
   });
 });

@@ -2,6 +2,7 @@ import React, { useRef, useEffect } from 'react';
 
 interface OpticalMatrixCanvasProps {
   frameData: Uint8Array[];
+  version: number;
   isFullscreen?: boolean;
   onRendered?: () => void;
   onError?: (message: string) => void;
@@ -9,13 +10,14 @@ interface OpticalMatrixCanvasProps {
 
 export const OpticalMatrixCanvas: React.FC<OpticalMatrixCanvasProps> = ({
   frameData,
+  version,
   isFullscreen,
   onRendered,
   onError,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const workerRef = useRef<Worker | null>(null);
-  const pendingRef = useRef<Uint8Array[] | null>(null);
+  const pendingRef = useRef<{ packets: Uint8Array[]; version: number } | null>(null);
   const busyRef = useRef(false);
   const callbacksRef = useRef({ onRendered, onError });
 
@@ -59,13 +61,14 @@ export const OpticalMatrixCanvas: React.FC<OpticalMatrixCanvasProps> = ({
 
   useEffect(() => {
     if (!frameData.length || !workerRef.current) return;
+    const request = { packets: frameData, version };
     if (busyRef.current) {
-      pendingRef.current = frameData;
+      pendingRef.current = request;
       return;
     }
     busyRef.current = true;
-    workerRef.current.postMessage(frameData);
-  }, [frameData]);
+    workerRef.current.postMessage(request);
+  }, [frameData, version]);
 
   return (
     <div className={`relative flex items-center justify-center bg-white rounded-2xl overflow-hidden shadow-2xl ${isFullscreen ? 'w-screen h-screen fixed inset-0 z-50 p-2' : 'w-full aspect-square max-w-[580px] mx-auto'}`}>

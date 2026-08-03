@@ -4,21 +4,23 @@ import { createQRTransferProfile } from '@raptorqr/core/protocol/profiles';
 import { packetizeRaptorQ } from '@raptorqr/core/sender/raptorq_packetizer';
 import { createRaptorQPlaybackOrders } from '@raptorqr/core/sender/raptorq_playback';
 
-export const RAPTOR_MODE = {
-  version: 30,
-  eccLevel: 'L' as const,
-  fps: 30,
-  parallel: 4,
-  repairPercent: 20,
-  scale: 2,
+export interface RaptorSettings {
+  version: number;
+  fps: number;
+  parallel: 1 | 4;
+}
+
+export const DEFAULT_RAPTOR_SETTINGS: RaptorSettings = {
+  version: 20,
+  fps: 15,
+  parallel: 1,
 };
+
+export const RAPTOR_ECC_LEVEL = 'L' as const;
+export const RAPTOR_REPAIR_PERCENT = 20;
 
 const SESSION_HEADER_SIZE = 6;
 const SESSION_MAGIC = 0x524c; // "LR" in little-endian.
-const qrProfile = createQRTransferProfile(RAPTOR_MODE.version, RAPTOR_MODE.eccLevel);
-
-export const RAPTOR_SYMBOL_SIZE = qrProfile.maxPayloadSize - SESSION_HEADER_SIZE;
-export const RAPTOR_SOURCE_BYTES = RAPTOR_SYMBOL_SIZE - 4;
 export const RAPTOR_MAX_TRANSFER_SIZE = 0xffffff;
 
 export interface RaptorFrame {
@@ -26,14 +28,25 @@ export interface RaptorFrame {
   packet: Packet;
 }
 
-export async function createRaptorTransfer(data: Uint8Array, sessionId: number) {
+export function getRaptorCapacity(version: number) {
+  const qrProfile = createQRTransferProfile(version, RAPTOR_ECC_LEVEL);
+  const symbolSize = qrProfile.maxPayloadSize - SESSION_HEADER_SIZE;
+  return { qrProfile, symbolSize, sourceBytes: symbolSize - 4 };
+}
+
+export async function createRaptorTransfer(
+  data: Uint8Array,
+  sessionId: number,
+  settings: RaptorSettings = DEFAULT_RAPTOR_SETTINGS,
+) {
   if (data.length > RAPTOR_MAX_TRANSFER_SIZE) {
     throw new Error('Передача больше 16 МБ пока не поддерживается.');
   }
 
+  const capacity = getRaptorCapacity(settings.version);
   const encoded = await packetizeRaptorQ(data, false, false, undefined, undefined, {
-    maxTransportPayloadSize: RAPTOR_SYMBOL_SIZE,
-    repairPercent: RAPTOR_MODE.repairPercent,
+    maxTransportPayloadSize: capacity.symbolSize,
+    repairPercent: RAPTOR_REPAIR_PERCENT,
   });
   const orders = createRaptorQPlaybackOrders(
     encoded.sourcePacketIndices,
@@ -46,6 +59,7 @@ export async function createRaptorTransfer(data: Uint8Array, sessionId: number) 
     initialOrder: orders.initialOrder,
     loopOrder: orders.loopOrder,
     sourcePackets: encoded.sourceGenerations,
+    sourceBytes: capacity.sourceBytes,
   };
 }
 
@@ -78,7 +92,6 @@ export function createRaptorDecoder(frame: RaptorFrame): Promise<RaptorQWasmDeco
 
 function wrapRaptorPacket(sessionId: number, packet: Uint8Array): Uint8Array {
   if (!Number.isInteger(sessionId) || sessionId <= 0) throw new Error('Некорректный идентификатор передачи.');
-  if (packet.length + SESSION_HEADER_SIZE > qrProfile.maxPacketSize) throw new Error('QR-пакет переполнен.');
   const frame = new Uint8Array(SESSION_HEADER_SIZE + packet.length);
   const view = new DataView(frame.buffer);
   view.setUint16(0, SESSION_MAGIC, true);

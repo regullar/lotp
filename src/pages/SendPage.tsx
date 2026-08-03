@@ -7,8 +7,10 @@ import { LOTPContainer } from '../protocol/container/lotpContainer';
 import { ManifestSerializer } from '../protocol/manifest';
 import {
   createRaptorTransfer,
-  RAPTOR_MODE,
-  RAPTOR_SOURCE_BYTES,
+  DEFAULT_RAPTOR_SETTINGS,
+  getRaptorCapacity,
+  RAPTOR_REPAIR_PERCENT,
+  type RaptorSettings,
 } from '../protocol/raptorTransport';
 import { LOTPCrypto } from '../protocol/crypto/aesgcm';
 import { compressIfUseful } from '../protocol/compression';
@@ -48,6 +50,8 @@ export const SendPage: React.FC<SendPageProps> = ({ setActiveTab }) => {
   const lastRenderedRef = useRef<number>(0);
   const renderStartedRef = useRef<number>(0);
   const startTimeRef = useRef<number>(0);
+  const activeSettingsRef = useRef<RaptorSettings>(DEFAULT_RAPTOR_SETTINGS);
+  const sourceBytesRef = useRef(0);
 
   const handleFilesSelected = (newFiles: File[]) => {
     setFiles((prev) => [...prev, ...newFiles]);
@@ -57,7 +61,7 @@ export const SendPage: React.FC<SendPageProps> = ({ setActiveTab }) => {
     setFiles((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const startTransmission = async () => {
+  const startTransmission = async (settings: RaptorSettings) => {
     if (files.length === 0) return;
     setTransmissionError(null);
 
@@ -85,12 +89,13 @@ export const SendPage: React.FC<SendPageProps> = ({ setActiveTab }) => {
       }
 
       const sessionId = crypto.getRandomValues(new Uint32Array(1))[0] || 1;
+      const capacity = getRaptorCapacity(settings.version);
       const manifest = await ManifestSerializer.create(
         String(sessionId),
         fileItems,
         containerData,
-        RAPTOR_SOURCE_BYTES,
-        'raptor-v30-l',
+        capacity.sourceBytes,
+        `raptor-v${settings.version}-l`,
         PaletteMode.MONO_1BIT,
         isEncrypted,
         cryptoMeta,
@@ -101,11 +106,13 @@ export const SendPage: React.FC<SendPageProps> = ({ setActiveTab }) => {
       transferData.set(manifestBytes);
       transferData.set(containerData, manifestBytes.length);
 
-      const transfer = await createRaptorTransfer(transferData, sessionId);
+      const transfer = await createRaptorTransfer(transferData, sessionId, settings);
       packetsRef.current = transfer.packets;
       initialOrderRef.current = transfer.initialOrder;
       loopOrderRef.current = transfer.loopOrder;
       nextFrameRef.current = 1;
+      activeSettingsRef.current = { ...settings };
+      sourceBytesRef.current = transfer.sourceBytes;
       setTotalK(transfer.sourcePackets);
       setSymbolId(0);
 
@@ -125,10 +132,11 @@ export const SendPage: React.FC<SendPageProps> = ({ setActiveTab }) => {
   const getDisplayFrame = (frameIndex: number): Uint8Array[] => {
     const initial = initialOrderRef.current;
     const loop = loopOrderRef.current;
-    const frameCount = Math.ceil(initial.length / RAPTOR_MODE.parallel);
+    const parallel = activeSettingsRef.current.parallel;
+    const frameCount = Math.ceil(initial.length / parallel);
     const order = frameIndex < frameCount ? initial : loop;
-    const start = (frameIndex % frameCount) * RAPTOR_MODE.parallel;
-    return Array.from({ length: RAPTOR_MODE.parallel }, (_, tile) =>
+    const start = (frameIndex % frameCount) * parallel;
+    return Array.from({ length: parallel }, (_, tile) =>
       packetsRef.current[order[(start + tile) % order.length]],
     );
   };
@@ -142,18 +150,19 @@ export const SendPage: React.FC<SendPageProps> = ({ setActiveTab }) => {
 
   const handleRendered = () => {
     if (!transmittingRef.current) return;
+    const activeSettings = activeSettingsRef.current;
     const now = performance.now();
-    const delta = lastRenderedRef.current ? now - lastRenderedRef.current : 1000 / RAPTOR_MODE.fps;
+    const delta = lastRenderedRef.current ? now - lastRenderedRef.current : 1000 / activeSettings.fps;
     lastRenderedRef.current = now;
-    const shown = nextFrameRef.current * RAPTOR_MODE.parallel;
+    const shown = nextFrameRef.current * activeSettings.parallel;
     const elapsed = (now - startTimeRef.current) / 1000;
     setSymbolId(shown);
     setElapsedSec(Math.round(elapsed));
-    setCurrentFPS(Math.min(RAPTOR_MODE.fps, Math.round(1000 / Math.max(1, delta))));
-    setAvgSpeedBps(Math.round(shown * RAPTOR_SOURCE_BYTES / Math.max(1, elapsed)));
+    setCurrentFPS(Math.min(activeSettings.fps, Math.round(1000 / Math.max(1, delta))));
+    setAvgSpeedBps(Math.round(shown * sourceBytesRef.current / Math.max(1, elapsed)));
     if (!pausedRef.current) {
       const renderTime = now - renderStartedRef.current;
-      timerRef.current = window.setTimeout(queueNextFrame, Math.max(0, 1000 / RAPTOR_MODE.fps - renderTime));
+      timerRef.current = window.setTimeout(queueNextFrame, Math.max(0, 1000 / activeSettings.fps - renderTime));
     }
   };
 
@@ -172,7 +181,7 @@ export const SendPage: React.FC<SendPageProps> = ({ setActiveTab }) => {
   };
 
   const redundancyPercent = totalK > 0
-    ? Math.min(RAPTOR_MODE.repairPercent, Math.max(0, Math.round((symbolId / totalK - 1) * 100)))
+    ? Math.min(RAPTOR_REPAIR_PERCENT, Math.max(0, Math.round((symbolId / totalK - 1) * 100)))
     : 0;
 
   return (
@@ -212,6 +221,7 @@ export const SendPage: React.FC<SendPageProps> = ({ setActiveTab }) => {
           <div className="bg-neutral-900/90 rounded-3xl border border-neutral-800 p-6 flex flex-col items-center gap-6 shadow-2xl">
             <OpticalMatrixCanvas
               frameData={frameData}
+              version={activeSettingsRef.current.version}
               isFullscreen={isFullscreen}
               onRendered={handleRendered}
               onError={setTransmissionError}
@@ -265,7 +275,7 @@ export const SendPage: React.FC<SendPageProps> = ({ setActiveTab }) => {
             <MetricCard
               label="Display FPS"
               value={currentFPS}
-              subtext={`Target ${RAPTOR_MODE.fps} FPS`}
+              subtext={`Target ${activeSettingsRef.current.fps} FPS`}
               accent="cyan"
             />
             <MetricCard
