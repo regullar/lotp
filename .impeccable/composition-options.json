@@ -1,0 +1,48 @@
+{
+  "title": "Choose LumenLink's composition",
+  "question": "All three use the same approved visual system; choose the structure that should govern the whole app.",
+  "options": [
+    {
+      "id": "comp-a",
+      "label": "Twin endpoints",
+      "kicker": "A",
+      "lineage": "equal Send and Receive entry points",
+      "thesis": "The home screen is one optical link with two equally obvious ends.",
+      "palette": ["#FFFFFF", "#0B1512", "#91DED4", "#3E7BFA"],
+      "materials": ["deep ink panel", "mint optical line", "white utility shell"],
+      "viewport": "A large promise sits beside reciprocal Send and Receive controls joined by the physical light path.",
+      "risk": "The mechanism stays abstract unless the screen and camera labels remain explicit.",
+      "case": "Best for an immediate choice between the two core actions.",
+      "hero": ".impeccable/mocks/comp-a-twin-endpoints.png"
+    },
+    {
+      "id": "comp-b",
+      "label": "Optical window",
+      "kicker": "B",
+      "lineage": "large product-demonstration hero",
+      "thesis": "A single side-on device scene proves the screen-to-camera mechanism before any explanation.",
+      "palette": ["#FFFFFF", "#0B1512", "#91DED4", "#3E7BFA"],
+      "materials": ["matte device forms", "bright optical beam", "framed proof scene"],
+      "viewport": "The promise and actions sit inside one rounded demonstration window with a three-step strip crossing its base.",
+      "risk": "The authored device scene requires the most implementation work and must not imply unsupported browser versions.",
+      "case": "Best mechanism proof and strongest visual memory.",
+      "hero": ".impeccable/mocks/comp-b-optical-window.png"
+    },
+    {
+      "id": "comp-c",
+      "label": "Product window",
+      "kicker": "C",
+      "lineage": "product-led operational landing",
+      "thesis": "The working Send interface is the hero, so trust comes from visible product behavior.",
+      "palette": ["#FFFFFF", "#0B1512", "#91DED4", "#3E7BFA"],
+      "materials": ["dark working panel", "hairline UI rules", "plain utility controls"],
+      "viewport": "A compact promise and two actions lead into the real file-selection and encryption workflow.",
+      "risk": "Showing Send in detail can make Receive feel secondary.",
+      "case": "Best for frequent users who want to operate immediately.",
+      "hero": ".impeccable/mocks/comp-c-product-window.png"
+    }
+  ],
+  "reroll": false,
+  "canon": false,
+  "steer": true
+}

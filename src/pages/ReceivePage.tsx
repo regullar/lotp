@@ -55,7 +55,7 @@ const RestoredFileActions: React.FC<{
       <a
         href={url}
         download={file.name}
-        className="px-4 py-2 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-black font-bold text-xs flex items-center gap-1.5 transition-colors"
+        className="px-4 py-2 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-neutral-950 font-bold text-xs flex items-center gap-1.5 transition-colors"
       >
         <Download className="w-4 h-4" />
         {downloadLabel}
@@ -267,7 +267,7 @@ export const ReceivePage: React.FC<ReceivePageProps> = ({ setActiveTab }) => {
     let frameId = 0;
     const noSignalTimer = window.setTimeout(() => {
       if (active && !decoderRef.current) {
-        setRecoveryError('Ни один QR-кадр не считан. Поместите весь зелёный квадрат в кадр и увеличьте яркость экрана.');
+        setRecoveryError('Ни один QR-кадр не считан. Поместите всю рамку в кадр и увеличьте яркость экрана.');
       }
     }, 10_000);
 
@@ -329,15 +329,15 @@ export const ReceivePage: React.FC<ReceivePageProps> = ({ setActiveTab }) => {
     <div className="max-w-4xl mx-auto py-6 px-4 space-y-6">
       <button
         type="button"
-        onClick={() => setActiveTab('send')}
+        onClick={() => setActiveTab('home')}
         className="flex items-center gap-2 text-xs font-mono text-neutral-400 hover:text-white transition-colors"
       >
-        <ArrowLeft className="w-4 h-4" /> Back to Dashboard
+        <ArrowLeft className="w-4 h-4" /> На главную
       </button>
 
       {!stream && !isCompleted ? (
         <div className="bg-neutral-900/80 rounded-3xl border border-neutral-800 p-8 text-center space-y-6 shadow-2xl">
-          <div className="w-16 h-16 rounded-2xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400 mx-auto">
+          <div className="w-16 h-16 rounded-2xl border border-neutral-800 bg-neutral-950 flex items-center justify-center text-cyan-400 mx-auto">
             <Camera className="w-8 h-8" />
           </div>
           <div>
@@ -358,18 +358,18 @@ export const ReceivePage: React.FC<ReceivePageProps> = ({ setActiveTab }) => {
           <button
             type="button"
             onClick={handleStartScanning}
-            className="px-8 py-3.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black font-bold text-sm tracking-wide shadow-lg shadow-cyan-500/20 transition-colors"
+            className="px-8 py-3.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-neutral-950 font-bold text-sm tracking-wide transition-colors"
           >
             {t.cameraAccess}
           </button>
         </div>
       ) : isCompleted ? (
-        <div className="bg-neutral-900/90 rounded-3xl border border-emerald-500/40 p-8 space-y-6 text-center shadow-2xl">
-          <div className="w-16 h-16 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 mx-auto">
+        <div className="bg-neutral-900/90 rounded-3xl border border-neutral-800 p-8 space-y-6 text-center shadow-2xl">
+          <div className="w-16 h-16 rounded-2xl border border-neutral-800 bg-neutral-950 flex items-center justify-center text-emerald-400 mx-auto">
             <CheckCircle2 className="w-8 h-8" />
           </div>
           <h2 className="text-2xl font-bold text-white">{t.fileRestored}</h2>
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-xs font-mono text-emerald-400">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-neutral-800 bg-neutral-950 text-xs font-mono text-emerald-400">
             <CheckCircle2 className="w-3.5 h-3.5" />
             {t.verifyHash}
           </div>
@@ -472,7 +472,7 @@ export const ReceivePage: React.FC<ReceivePageProps> = ({ setActiveTab }) => {
             </div>
             <div className="w-full h-3 bg-neutral-950 rounded-full overflow-hidden border border-neutral-800 p-0.5">
               <div
-                className="h-full bg-gradient-to-r from-emerald-500 to-cyan-400 rounded-full transition-[width] duration-300"
+                className="h-full bg-cyan-500 rounded-full transition-[width] duration-300"
                 style={{ width: `${recoveryProgress}%` }}
               />
             </div>

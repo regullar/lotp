@@ -188,10 +188,10 @@ export const SendPage: React.FC<SendPageProps> = ({ setActiveTab }) => {
     <div className="max-w-4xl mx-auto py-6 px-4 space-y-6">
       <button
         type="button"
-        onClick={() => setActiveTab('send')}
+        onClick={() => setActiveTab('home')}
         className="flex items-center gap-2 text-xs font-mono text-neutral-400 hover:text-white transition-colors"
       >
-        <ArrowLeft className="w-4 h-4" /> Back to Dashboard
+        <ArrowLeft className="w-4 h-4" /> На главную
       </button>
 
       {!isTransmitting ? (
@@ -234,7 +234,7 @@ export const SendPage: React.FC<SendPageProps> = ({ setActiveTab }) => {
             )}
 
             <div className="bg-neutral-950/80 border border-neutral-800 p-3 rounded-xl text-xs text-neutral-400 max-w-md text-center">
-              <ShieldAlert className="w-4 h-4 text-emerald-400 inline mr-1.5" />
+              <ShieldAlert className="w-4 h-4 text-cyan-400 inline mr-1.5" />
               RaptorQ добавляет 20% ремонтных пакетов; поток повторяется до полного восстановления.
             </div>
 

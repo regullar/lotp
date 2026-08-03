@@ -1,0 +1,12 @@
+Use case: ui-mockup
+Asset type: high-fidelity north-star composition for a real desktop web application
+Primary request: Design LumenLink’s home screen and the beginning of its application shell. This is composition C, “Product window”: the category standard for premium privacy software, executed at the craft level of LocalSend and Alaqan.
+Surface structure in order: 1) slim white navigation with LumenLink wordmark, Send, Receive, Calibrate, Diagnostics, About, RU/EN switch; 2) split first viewport with a bold compact promise and two actions in a narrow left column; 3) a large rounded live product panel on the right, showing the actual empty state of the Send workflow—file drop area, encryption toggle, simple transfer profile controls, and a small screen-to-camera path in the panel header; 4) below the split, one horizontal statement “Никаких посредников” with three plain supporting facts; 5) the next app section barely enters.
+Text (verbatim): “LumenLink”, “Передача без посредников.”, “Экран показывает. Камера принимает.”, “Передать файл”, “Принять файл”, “Выберите файлы”, “Шифрование”, “Начать передачу”, “Никаких посредников”, “Только свет между устройствами”.
+Style/medium: polished production web interface, premium but conventional privacy utility, product-led and operational rather than marketing-heavy.
+Composition/framing: straight-on 16:10 desktop viewport; white page with disciplined grid; bold left headline; dominant dark product window on right; crisp alignment and generous negative space; no browser chrome.
+Color palette: white page, deep ink #0B1512, soft mint #91DED4, cobalt #3E7BFA used on one primary control, off-white and warm gray.
+Typography: bold modern grotesk display, neutral readable UI sans; no serif and no monospace display.
+Materials/textures: flat matte digital surfaces, subtle hairline rules, controlled 20–28px corner radius, almost no shadow.
+Constraints: preserve real current product behavior—file selection, optional encryption, optical screen-to-camera transfer, calibration and diagnostics; no made-up statistics, customers, testimonials, pricing, browser-version requirements, or cloud features; Send and Receive must be obvious; internal panel must look usable and implementable.
+Avoid: gradients, glassmorphism, bento-grid clutter, neon cyberpunk, QR wallpaper, generic shield hero, excessive pills, tiny decorative copy, floating blobs, photography, device mockups, invented claims, fake charts.

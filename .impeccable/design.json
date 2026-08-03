@@ -1,0 +1,238 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-08-03T20:22:57Z",
+  "title": "Design System: LumenLink",
+  "extensions": {
+    "colorMeta": {
+      "proof-ink": {
+        "role": "neutral",
+        "displayName": "Proof Ink",
+        "canonical": "#0b1512",
+        "tonalRamp": ["#0b1512", "#11201c", "#24342f", "#3b4d47", "#5b6c66", "#75857f", "#c5ceca", "#f2f5f3"]
+      },
+      "work-panel": {
+        "role": "neutral",
+        "displayName": "Work Panel",
+        "canonical": "#11201c",
+        "tonalRamp": ["oklch(15% 0.018 165)", "oklch(26% 0.018 165)", "oklch(37% 0.018 165)", "oklch(48% 0.018 165)", "oklch(60% 0.018 165)", "oklch(72% 0.018 165)", "oklch(84% 0.018 165)", "oklch(95% 0.018 165)"]
+      },
+      "neutral-800": {
+        "role": "neutral",
+        "displayName": "Neutral 800",
+        "canonical": "#24342f",
+        "tonalRamp": ["#0b1512", "#11201c", "#24342f", "#3b4d47", "#5b6c66", "#75857f", "#c5ceca", "#f2f5f3"]
+      },
+      "neutral-700": {
+        "role": "neutral",
+        "displayName": "Neutral 700",
+        "canonical": "#3b4d47",
+        "tonalRamp": ["#0b1512", "#11201c", "#24342f", "#3b4d47", "#5b6c66", "#75857f", "#c5ceca", "#f2f5f3"]
+      },
+      "neutral-500": {
+        "role": "neutral",
+        "displayName": "Neutral 500",
+        "canonical": "#75857f",
+        "tonalRamp": ["#0b1512", "#11201c", "#24342f", "#3b4d47", "#5b6c66", "#75857f", "#c5ceca", "#f2f5f3"]
+      },
+      "neutral-400": {
+        "role": "neutral",
+        "displayName": "Neutral 400",
+        "canonical": "#9ca9a5",
+        "tonalRamp": ["#0b1512", "#11201c", "#24342f", "#3b4d47", "#5b6c66", "#9ca9a5", "#c5ceca", "#f2f5f3"]
+      },
+      "neutral-300": {
+        "role": "neutral",
+        "displayName": "Neutral 300",
+        "canonical": "#c5ceca",
+        "tonalRamp": ["#0b1512", "#11201c", "#24342f", "#3b4d47", "#5b6c66", "#9ca9a5", "#c5ceca", "#f2f5f3"]
+      },
+      "neutral-200": {
+        "role": "neutral",
+        "displayName": "Neutral 200",
+        "canonical": "#dde3e0",
+        "tonalRamp": ["#0b1512", "#11201c", "#24342f", "#3b4d47", "#75857f", "#9ca9a5", "#dde3e0", "#f2f5f3"]
+      },
+      "neutral-100": {
+        "role": "neutral",
+        "displayName": "Neutral 100",
+        "canonical": "#f2f5f3",
+        "tonalRamp": ["#0b1512", "#11201c", "#24342f", "#3b4d47", "#75857f", "#9ca9a5", "#dde3e0", "#f2f5f3"]
+      },
+      "shell-canvas": {
+        "role": "neutral",
+        "displayName": "Shell Canvas",
+        "canonical": "#f4f6f5",
+        "tonalRamp": ["oklch(15% 0.006 165)", "oklch(26% 0.006 165)", "oklch(37% 0.006 165)", "oklch(48% 0.006 165)", "oklch(60% 0.006 165)", "oklch(72% 0.006 165)", "oklch(84% 0.006 165)", "oklch(95% 0.006 165)"]
+      },
+      "white-shell": {
+        "role": "neutral",
+        "displayName": "White Shell",
+        "canonical": "#ffffff",
+        "tonalRamp": ["#262626", "#424242", "#5e5e5e", "#7a7a7a", "#969696", "#b3b3b3", "#d9d9d9", "#ffffff"]
+      },
+      "body-ink": {
+        "role": "neutral",
+        "displayName": "Body Ink",
+        "canonical": "#10201c",
+        "tonalRamp": ["oklch(15% 0.018 165)", "oklch(26% 0.018 165)", "oklch(37% 0.018 165)", "oklch(48% 0.018 165)", "oklch(60% 0.018 165)", "oklch(72% 0.018 165)", "oklch(84% 0.018 165)", "oklch(95% 0.018 165)"]
+      },
+      "mint-signal": {
+        "role": "secondary",
+        "displayName": "Mint Signal",
+        "canonical": "#91ded4",
+        "tonalRamp": ["oklch(15% 0.09 182)", "oklch(26% 0.09 182)", "oklch(37% 0.09 182)", "oklch(48% 0.09 182)", "oklch(60% 0.09 182)", "oklch(72% 0.09 182)", "oklch(84% 0.09 182)", "oklch(95% 0.09 182)"]
+      },
+      "mint-light": {
+        "role": "secondary",
+        "displayName": "Mint Light",
+        "canonical": "#b6eee7",
+        "tonalRamp": ["oklch(15% 0.065 182)", "oklch(26% 0.065 182)", "oklch(37% 0.065 182)", "oklch(48% 0.065 182)", "oklch(60% 0.065 182)", "oklch(72% 0.065 182)", "oklch(84% 0.065 182)", "oklch(95% 0.065 182)"]
+      },
+      "mint-soft": {
+        "role": "secondary",
+        "displayName": "Mint Soft",
+        "canonical": "#cef6f1",
+        "tonalRamp": ["oklch(15% 0.045 182)", "oklch(26% 0.045 182)", "oklch(37% 0.045 182)", "oklch(48% 0.045 182)", "oklch(60% 0.045 182)", "oklch(72% 0.045 182)", "oklch(84% 0.045 182)", "oklch(95% 0.045 182)"]
+      },
+      "cobalt-primary": {
+        "role": "primary",
+        "displayName": "Cobalt Action",
+        "canonical": "#3e7bfa",
+        "tonalRamp": ["oklch(15% 0.18 258)", "oklch(26% 0.18 258)", "oklch(37% 0.18 258)", "oklch(48% 0.18 258)", "oklch(60% 0.18 258)", "oklch(72% 0.18 258)", "oklch(84% 0.18 258)", "oklch(95% 0.18 258)"]
+      },
+      "cobalt-light": {
+        "role": "primary",
+        "displayName": "Cobalt Light",
+        "canonical": "#6b9bff",
+        "tonalRamp": ["oklch(15% 0.14 258)", "oklch(26% 0.14 258)", "oklch(37% 0.14 258)", "oklch(48% 0.14 258)", "oklch(60% 0.14 258)", "oklch(72% 0.14 258)", "oklch(84% 0.14 258)", "oklch(95% 0.14 258)"]
+      },
+      "cobalt-hover": {
+        "role": "primary",
+        "displayName": "Cobalt Hover",
+        "canonical": "#2e69e8",
+        "tonalRamp": ["oklch(15% 0.19 258)", "oklch(26% 0.19 258)", "oklch(37% 0.19 258)", "oklch(48% 0.19 258)", "oklch(60% 0.19 258)", "oklch(72% 0.19 258)", "oklch(84% 0.19 258)", "oklch(95% 0.19 258)"]
+      },
+      "brand-teal": {
+        "role": "secondary",
+        "displayName": "Brand Teal",
+        "canonical": "#0d8f82",
+        "tonalRamp": ["oklch(15% 0.11 180)", "oklch(26% 0.11 180)", "oklch(37% 0.11 180)", "oklch(48% 0.11 180)", "oklch(60% 0.11 180)", "oklch(72% 0.11 180)", "oklch(84% 0.11 180)", "oklch(95% 0.11 180)"]
+      },
+      "ink-glass": {
+        "role": "neutral",
+        "displayName": "Ink Glass",
+        "canonical": "rgba(10, 29, 24, 0.7)",
+        "tonalRamp": ["oklch(15% 0.022 165 / 0.7)", "oklch(26% 0.022 165 / 0.7)", "oklch(37% 0.022 165 / 0.7)", "oklch(48% 0.022 165 / 0.7)", "oklch(60% 0.022 165 / 0.7)", "oklch(72% 0.022 165 / 0.7)", "oklch(84% 0.022 165 / 0.7)", "oklch(95% 0.022 165 / 0.7)"]
+      }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display", "purpose": "First-viewport promise and no other role." },
+      "headline": { "displayName": "Headline", "purpose": "Section-level introductions and readiness statements." },
+      "body": { "displayName": "Body", "purpose": "Operational copy, descriptions, and navigation labels." },
+      "label": { "displayName": "Label", "purpose": "Status, metadata, and compact controls." }
+    },
+    "shadows": [
+      { "name": "ambient-proof", "value": "0 22px 55px rgba(11, 21, 18, 0.18)", "purpose": "The single soft downward shadow behind the dominant optical window." },
+      { "name": "anchored-strip", "value": "0 14px 30px rgba(3, 12, 9, 0.26)", "purpose": "Clarifies the transfer strip overlapping the proof window." }
+    ],
+    "motion": [
+      { "name": "action-lift", "value": "180ms cubic-bezier(.2,.8,.2,1)", "purpose": "A 2px hover lift on the two hero actions." },
+      { "name": "state-standard", "value": "160ms ease", "purpose": "Navigation color and background state changes." },
+      { "name": "optical-breathe", "value": "6s cubic-bezier(.2,.8,.2,1) infinite", "purpose": "Bounded brightness and saturation pulse on the authored optical raster." },
+      { "name": "reduced-motion", "value": "0.01ms; 1 iteration", "purpose": "Near-static fallback for animations and transitions when reduced motion is requested." }
+    ],
+    "breakpoints": [
+      { "name": "shell-stack", "value": "1080px" },
+      { "name": "mobile-stack", "value": "760px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Action",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The one decisive cobalt action, used for Send in the proof window.",
+      "html": "<button class=\"ds-btn-primary\" type=\"button\"><svg aria-hidden=\"true\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M12 3v12\"/><path d=\"m17 8-5-5-5 5\"/><path d=\"M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4\"/></svg>Send file</button>",
+      "css": ".ds-btn-primary { min-height: 52px; display: inline-flex; align-items: center; justify-content: center; gap: 10px; padding: 0 22px; border: 1px solid #3e7bfa; border-radius: 12px; color: #fff; background: #3e7bfa; font: 720 15px Onest, sans-serif; cursor: pointer; transition: transform 180ms cubic-bezier(.2,.8,.2,1), background 180ms ease; } .ds-btn-primary svg { width: 19px; height: 19px; } .ds-btn-primary:hover { background: #2e69e8; transform: translateY(-2px); } .ds-btn-primary:focus-visible { outline: 3px solid #3e7bfa; outline-offset: 3px; } .ds-btn-primary:active { transform: translateY(0); }"
+    },
+    {
+      "name": "Reciprocal Action",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "The equally clear Receive action without competing with cobalt.",
+      "html": "<button class=\"ds-btn-secondary\" type=\"button\"><svg aria-hidden=\"true\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M12 3v12\"/><path d=\"m17 10-5 5-5-5\"/><path d=\"M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4\"/></svg>Receive file</button>",
+      "css": ".ds-btn-secondary { min-height: 52px; display: inline-flex; align-items: center; justify-content: center; gap: 10px; padding: 0 22px; border: 1px solid #91ded4; border-radius: 12px; color: #e7fbf8; background: rgba(10,29,24,.7); font: 720 15px Onest, sans-serif; cursor: pointer; transition: transform 180ms cubic-bezier(.2,.8,.2,1), background 180ms ease; } .ds-btn-secondary svg { width: 19px; height: 19px; } .ds-btn-secondary:hover { background: rgba(145,222,212,.12); transform: translateY(-2px); } .ds-btn-secondary:focus-visible { outline: 3px solid #3e7bfa; outline-offset: 3px; } .ds-btn-secondary:active { transform: translateY(0); }"
+    },
+    {
+      "name": "Navigation Item",
+      "kind": "nav",
+      "refersTo": "navigation-item",
+      "description": "Literal icon-and-label navigation for application destinations.",
+      "html": "<nav class=\"ds-nav\" aria-label=\"Primary navigation\"><button class=\"ds-nav-item ds-is-active\" type=\"button\"><svg aria-hidden=\"true\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M12 3v12\"/><path d=\"m17 8-5-5-5 5\"/><path d=\"M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4\"/></svg>Send</button></nav>",
+      "css": ".ds-nav { display: flex; align-items: center; gap: 4px; } .ds-nav-item { display: inline-flex; align-items: center; gap: 8px; padding: 10px 12px; border: 0; border-radius: 10px; color: #4b5b55; background: transparent; font: 580 14px Onest, sans-serif; cursor: pointer; transition: color 160ms ease, background 160ms ease; } .ds-nav-item svg { width: 17px; height: 17px; } .ds-nav-item:hover { color: #0b1512; background: #edf2f0; } .ds-nav-item:focus-visible { outline: 3px solid #3e7bfa; outline-offset: 3px; } .ds-nav-item.ds-is-active { color: #086f66; background: #e3f6f2; }"
+    },
+    {
+      "name": "Language Switch",
+      "kind": "button",
+      "description": "A compact bordered locale control in the white header.",
+      "html": "<button class=\"ds-language\" type=\"button\"><svg aria-hidden=\"true\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><circle cx=\"12\" cy=\"12\" r=\"10\"/><path d=\"M2 12h20\"/><path d=\"M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z\"/></svg>EN</button>",
+      "css": ".ds-language { min-height: 40px; display: inline-flex; align-items: center; gap: 7px; padding: 0 13px; border: 1px solid #d6ddda; border-radius: 12px; color: #263832; background: #fff; font: 700 12px Onest, sans-serif; cursor: pointer; } .ds-language svg { width: 16px; height: 16px; } .ds-language:hover { border-color: #91a09b; } .ds-language:focus-visible { outline: 3px solid #3e7bfa; outline-offset: 3px; } .ds-language:active { background: #f2f5f3; }"
+    },
+    {
+      "name": "Dark Field",
+      "kind": "input",
+      "refersTo": "field-dark",
+      "description": "Compact text entry inside dark Send and Receive working surfaces.",
+      "html": "<label class=\"ds-field-label\">Encryption password<input class=\"ds-field\" type=\"password\" placeholder=\"Enter password\" /></label>",
+      "css": ".ds-field-label { display: grid; gap: 8px; color: #c5ceca; font: 600 12px Onest, sans-serif; } .ds-field { width: 100%; padding: 8px 12px; border: 1px solid #24342f; border-radius: 8px; color: #fff; background: #0b1512; font: 400 12px Onest, sans-serif; outline: none; } .ds-field::placeholder { color: #75857f; } .ds-field:hover { border-color: #3b4d47; } .ds-field:focus-visible { border-color: #91ded4; outline: 3px solid #3e7bfa; outline-offset: 3px; }"
+    },
+    {
+      "name": "File Drop",
+      "kind": "card",
+      "description": "The large dashed file-selection target on the Send workflow.",
+      "html": "<button class=\"ds-file-drop\" type=\"button\"><span class=\"ds-file-icon\"><svg aria-hidden=\"true\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4\"/><polyline points=\"17 8 12 3 7 8\"/><line x1=\"12\" x2=\"12\" y1=\"3\" y2=\"15\"/></svg></span><strong>Select files</strong><small>Drop files here or choose from this device</small></button>",
+      "css": ".ds-file-drop { width: 100%; display: grid; justify-items: center; gap: 6px; padding: 32px; border: 2px dashed #3b4d47; border-radius: 16px; color: #f2f5f3; background: rgba(17,32,28,.4); font-family: Onest, sans-serif; text-align: center; cursor: pointer; transition: border-color 160ms ease, background 160ms ease; } .ds-file-drop:hover { border-color: rgba(145,222,212,.6); background: rgba(17,32,28,.8); } .ds-file-drop:focus-visible { outline: 3px solid #3e7bfa; outline-offset: 3px; } .ds-file-drop:active { background: #11201c; } .ds-file-icon { width: 48px; height: 48px; display: grid; place-items: center; margin-bottom: 6px; border: 1px solid rgba(145,222,212,.2); border-radius: 12px; color: #b6eee7; background: rgba(145,222,212,.1); } .ds-file-icon svg { width: 24px; height: 24px; } .ds-file-drop strong { font-size: 16px; } .ds-file-drop small { color: #9ca9a5; font-size: 12px; }"
+    },
+    {
+      "name": "Transfer Step",
+      "kind": "card",
+      "description": "One cell in the three-step strip crossing the proof window.",
+      "html": "<div class=\"ds-transfer-step\"><span class=\"ds-step-number\">1</span><svg aria-hidden=\"true\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z\"/><polyline points=\"14 2 14 8 20 8\"/></svg><strong>Choose a file</strong></div>",
+      "css": ".ds-transfer-step { min-height: 78px; display: flex; align-items: center; gap: 14px; padding: 18px 24px; border: 1px solid #dde3e0; border-radius: 16px; color: #10201c; background: #fff; font: 650 14px Onest, sans-serif; } .ds-transfer-step > svg { width: 24px; height: 24px; } .ds-step-number { width: 28px; height: 28px; flex: 0 0 28px; display: grid; place-items: center; border-radius: 50%; color: #075f57; background: #d9f5f1; font: 780 12px Onest, sans-serif; } .ds-transfer-step:hover { border-color: #c5ceca; } .ds-transfer-step:focus-within { outline: 3px solid #3e7bfa; outline-offset: 3px; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Optical Window",
+    "overview": "LumenLink is a polished privacy utility played with plain confidence. A quiet white shell holds a single deep-ink proof surface where the product's physical truth becomes visible: an authored device scene and mint optical path show a file crossing directly from screen to camera, while cobalt identifies the primary action.\n\nThe system is spacious and immediately operable rather than dashboard-dense. Oversized language explains the mechanism before technical detail, literal Lucide action icons keep controls familiar, and working views return to restrained dark panels with hairline structure. The result feels trustworthy because it shows what happens instead of decorating privacy as an abstract claim.",
+    "keyCharacteristics": [
+      "White utility shell around deep-ink proof and working surfaces.",
+      "Mint optical signal paired with one decisive cobalt action.",
+      "Onest variable typography from 400 through 800.",
+      "Controlled functional rounding and one dominant proof-window silhouette.",
+      "Authored optical imagery, literal action icons, and hairline separators.",
+      "Responsive stacking with motion reduced to near-static when requested."
+    ],
+    "rules": [
+      { "name": "The Signal Discipline Rule", "body": "Mint proves transfer or local state; cobalt identifies the primary action. Neither color becomes decoration.", "section": "colors" },
+      { "name": "The White-Shell Rule", "body": "The global shell stays quiet and pale so the deep proof window reads as the product's physical stage.", "section": "colors" },
+      { "name": "The Oversized Proof Rule", "body": "Large type states the direct-transfer promise before protocol detail; UI labels remain compact and practical.", "section": "typography" },
+      { "name": "The Border-Led Work Rule", "body": "Operational panels and rows use tone and hairline separators; shadows are reserved for the home proof composition.", "section": "elevation" },
+      { "name": "The Dominant Window Rule", "body": "The 28px optical proof window is the largest silhouette; ordinary controls stay within the functional radius range.", "section": "shapes" }
+    ],
+    "dos": [
+      "Do use cobalt for the one clearest action and mint for optical, local, selected, or positive signal.",
+      "Do keep dark working surfaces flat, separated by neutral hairlines and tonal layers.",
+      "Do use literal Lucide icons beside action labels; icons support text rather than replace it.",
+      "Do preserve English and Russian legibility with the shipped Onest variable subsets.",
+      "Do stack the proof composition and functional regions cleanly on mobile.",
+      "Do preserve the reduced-motion fallback for every new animation or transition."
+    ],
+    "donts": [
+      "Don't turn the shell into a field of nested cards or competing elevated panels.",
+      "Don't spread cobalt and mint across decorative accents that weaken their action and signal meanings.",
+      "Don't substitute generic stock imagery, abstract cloud graphics, or surveillance theatrics for the authored optical proof.",
+      "Don't introduce decorative icon styles when literal Lucide actions already express the function.",
+      "Don't make transfer status, progress, or errors depend on color alone."
+    ]
+  }
+}

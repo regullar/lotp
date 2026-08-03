@@ -1,0 +1,12 @@
+Use case: ui-mockup
+Asset type: high-fidelity north-star composition for a real desktop web application
+Primary request: Design LumenLink’s home screen and the beginning of its application shell. This is composition A, “Twin endpoints”: the category standard for premium privacy software, executed at the craft level of LocalSend and Alaqan.
+Surface structure in order: 1) slim white navigation with LumenLink wordmark, Send, Receive, Calibrate, Diagnostics, About, RU/EN switch; 2) a deep ink rounded hero frame occupying most of the viewport; 3) oversized Russian promise on the left; 4) on the right, two large reciprocal Send and Receive endpoint controls joined by a visible mint optical path with a minimal screen-to-camera diagram; 5) a quiet proof strip at the bottom with “Без серверов”, “Без аккаунтов”, “Работает офлайн”; 6) the next section barely enters below.
+Text (verbatim): “LumenLink”, “Передавайте файлы через свет.”, “Приватно по самой физике.”, “Передать файл”, “Принять файл”, “Без серверов”, “Без аккаунтов”, “Работает офлайн”.
+Style/medium: polished production web interface, premium but conventional privacy utility, direct and trustworthy, not experimental.
+Composition/framing: straight-on 16:10 desktop viewport, 1536×960 feel; generous whitespace in nav, one dominant rounded hero frame, clear send/receive hierarchy, crisp alignment, no browser chrome.
+Color palette: white page, deep ink-green #0B1512 hero, soft mint #91DED4 primary accent, bright cobalt #3E7BFA used once for secondary emphasis, off-white text.
+Typography: bold modern grotesk display with compact line-height; neutral readable UI sans; no serif, no monospace display.
+Materials/textures: flat digital surfaces with restrained matte noise only; subtle hairline separators; controlled 24–32px corner radius.
+Constraints: preserve real product truth—screen-to-camera optical file transfer, no server; no made-up statistics, customers, testimonials, pricing, or cloud features; make Send and Receive actionable and equally obvious; show enough of the app shell to guide later screens.
+Avoid: gradients, glassmorphism, bento-grid clutter, neon cyberpunk, QR-code wallpaper, generic shield icon hero, excessive pills, tiny text, floating blobs, photography, device mockup held in a hand, invented claims.

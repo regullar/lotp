@@ -1,0 +1,12 @@
+Use case: ui-mockup
+Asset type: high-fidelity north-star composition for a real desktop web application
+Primary request: Design LumenLink’s home screen and the beginning of its application shell. This is composition B, “Optical window”: the category standard for premium privacy software, executed at the craft level of LocalSend and Alaqan.
+Surface structure in order: 1) slim white navigation with LumenLink wordmark, Send, Receive, Calibrate, Diagnostics, About, RU/EN switch; 2) one oversized rounded hero window with a real product demonstration rather than a stock photo; 3) a compact headline and two actions overlay the left edge; 4) most of the window is an authored illustration of a laptop screen sending a bright optical code toward a nearby phone camera, shown in one clean side-on scene; 5) a three-step strip—Choose, Show, Scan—cuts into the bottom of the hero; 6) the browser compatibility status begins below.
+Text (verbatim): “LumenLink”, “Файл идёт только туда, куда светит экран.”, “Передать”, “Принять”, “Выберите файл”, “Покажите код”, “Сканируйте камерой”, “Локально. Без сервера.”
+Style/medium: polished production web interface, premium but conventional privacy utility; the product demonstration is a restrained editorial 3D/vector hybrid, not photography and not sci-fi.
+Composition/framing: straight-on 16:10 desktop viewport; white breathing room around one dominant rounded visual window, strong left-to-right path, clear top navigation and primary actions, no browser chrome.
+Color palette: white page, deep ink #0B1512, soft mint #91DED4, cobalt #3E7BFA, off-white, tiny warm gray.
+Typography: bold modern grotesk display, neutral readable UI sans; no serif, no monospace display.
+Materials/textures: smooth matte device silhouettes, a bright but flat optical beam, subtle hairline rules, controlled 24–32px corner radius.
+Constraints: preserve real product truth—screen-to-camera optical file transfer, no server; no made-up statistics, customers, testimonials, pricing, or cloud features; the screen and camera must visibly face each other; show enough system grammar for Send, Receive, and diagnostics.
+Avoid: gradients, glassmorphism, bento-grid clutter, neon cyberpunk, QR wallpaper, generic shield icon hero, excessive pills, tiny text, floating blobs, stock photography, hands or people, invented claims.

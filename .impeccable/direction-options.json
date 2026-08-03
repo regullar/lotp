@@ -1,0 +1,74 @@
+{
+  "title": "Choose LumenLink's visual world",
+  "question": "Keep the optical bench, take a challenger, or ask for a fresh roll.",
+  "options": [
+    {
+      "id": "assigned",
+      "label": "Optical Bench",
+      "kicker": "RECOMMENDED",
+      "lineage": "camera calibration cards and hands-on optics exhibits",
+      "thesis": "Privacy becomes a visible beam passing directly from screen to camera.",
+      "palette": ["#F6F6EF", "#1324FF", "#101010", "#FF5B3D", "#B8F23A"],
+      "materials": ["matte calibration card", "instrument enamel", "precise crop marks"],
+      "viewport": "A screen and camera face each other across a calibrated light corridor; Send and Receive are the two physical endpoints.",
+      "risk": "Can feel clinical unless the controls stay tactile and the copy stays human.",
+      "case": "Best on both axes: familiar physical cues for everyday users and a literal proof of the product mechanism.",
+      "sketch": ".impeccable/sketches/assigned.webp"
+    },
+    {
+      "id": "challenger-cyclorama",
+      "label": "First Light",
+      "lineage": "theater cyclorama lighting from blackout to day",
+      "thesis": "A file crosses the app as a cue of light that grows from darkness into arrival.",
+      "palette": ["#05060A", "#1748D1", "#F05D79", "#F7F5EB"],
+      "materials": ["depthless stage black", "cobalt horizon", "white-day wash"],
+      "viewport": "Two devices sit on opposite sides of a horizon; the transfer beam raises the scene from blackout to day.",
+      "risk": "The atmosphere can outrun the plain send-or-receive decision.",
+      "case": "Stronger emotional identification, weaker product clarity than Optical Bench.",
+      "sketch": ".impeccable/sketches/challenger-cyclorama.webp",
+      "hero": "https://impeccable.style/worlds/cards/stagecraft-theater-lighting-cyclorama-dawn-hero.webp",
+      "board": "https://impeccable.style/worlds/cards/stagecraft-theater-lighting-cyclorama-dawn.webp"
+    },
+    {
+      "id": "challenger-teletext",
+      "label": "Direct Broadcast",
+      "lineage": "broadcast teletext service pages",
+      "thesis": "Every workflow is a numbered local broadcast page with nothing behind the screen.",
+      "palette": ["#000000", "#FFFFFF", "#FFFF00", "#00FFFF", "#FF0000"],
+      "materials": ["phosphor black", "block mosaic graphics", "fixed broadcast eight"],
+      "viewport": "Page 100 makes Send and Receive large numbered destinations inside an exact character grid.",
+      "risk": "Feels technical and nostalgic to users who never lived with teletext.",
+      "case": "Very clear navigation, but weaker everyday identification and a less literal privacy proof.",
+      "sketch": ".impeccable/sketches/challenger-teletext.webp",
+      "hero": "https://impeccable.style/worlds/cards/broadcast-programming-teletext-service-hero.webp",
+      "board": "https://impeccable.style/worlds/cards/broadcast-programming-teletext-service.webp"
+    },
+    {
+      "id": "challenger-tensegrity",
+      "label": "Private Tension",
+      "lineage": "tensegrity sculpture in carbon rod and red cord",
+      "thesis": "The local link holds because every device and state is visibly connected.",
+      "palette": ["#ECEBE5", "#151515", "#E63232", "#8C8C86"],
+      "materials": ["pale concrete", "matte carbon rods", "taut red cord"],
+      "viewport": "Send and Receive become two anchored nodes joined by a live red transfer path with states pinned to its joints.",
+      "risk": "The force metaphor needs explanation before it reads as optical transfer.",
+      "case": "Fuses poorly: its counterforce story obscures the simple one-way handoff.",
+      "sketch": ".impeccable/sketches/challenger-tensegrity.webp",
+      "hero": "https://impeccable.style/worlds/cards/kinetic-sculpture-automata-tensegrity-breathing-column-hero.webp",
+      "board": "https://impeccable.style/worlds/cards/kinetic-sculpture-automata-tensegrity-breathing-column.webp"
+    }
+  ],
+  "reroll": true,
+  "canon": true,
+  "canonCard": {
+    "label": "The category standard",
+    "lineage": "polished privacy software",
+    "thesis": "A restrained product dashboard with clear actions and conventional trust cues.",
+    "palette": ["#FAFAFA", "#111111", "#2457FF", "#DADADA"],
+    "materials": ["neutral scale", "soft screenshot frames", "one restrained accent"],
+    "viewport": "A centered promise, two familiar action cards, and a concise local-only proof row.",
+    "risk": "Highly usable, but visually interchangeable with other privacy software.",
+    "sketch": ".impeccable/sketches/canon.webp"
+  },
+  "steer": true
+}

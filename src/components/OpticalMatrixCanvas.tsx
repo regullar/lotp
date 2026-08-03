@@ -26,6 +26,8 @@ export const OpticalMatrixCanvas: React.FC<OpticalMatrixCanvasProps> = ({
   }, [onRendered, onError]);
 
   useEffect(() => {
+    busyRef.current = false;
+    pendingRef.current = null;
     const worker = new Worker(new URL('../workers/qrRenderWorker.ts', import.meta.url), { type: 'module' });
     workerRef.current = worker;
     worker.onerror = (event) => {
@@ -56,7 +58,12 @@ export const OpticalMatrixCanvas: React.FC<OpticalMatrixCanvasProps> = ({
         worker.postMessage(next);
       }
     };
-    return () => worker.terminate();
+    return () => {
+      worker.terminate();
+      workerRef.current = null;
+      busyRef.current = false;
+      pendingRef.current = null;
+    };
   }, []);
 
   useEffect(() => {
@@ -71,7 +78,7 @@ export const OpticalMatrixCanvas: React.FC<OpticalMatrixCanvasProps> = ({
   }, [frameData, version]);
 
   return (
-    <div className={`relative flex items-center justify-center bg-white rounded-2xl overflow-hidden shadow-2xl ${isFullscreen ? 'w-screen h-screen fixed inset-0 z-50 p-2' : 'w-full aspect-square max-w-[580px] mx-auto'}`}>
+    <div className={`relative flex items-center justify-center bg-white rounded-2xl overflow-hidden ${isFullscreen ? 'w-screen h-screen fixed inset-0 z-50 p-2' : 'w-full aspect-square max-w-[580px] mx-auto'}`}>
       <canvas
         ref={canvasRef}
         width={580}

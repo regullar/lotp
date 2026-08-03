@@ -17,10 +17,10 @@ export const CameraViewfinder: React.FC<CameraViewfinderProps> = ({ videoRef, de
       <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
         <div className={`h-[72%] aspect-square rounded-3xl border-2 transition-colors ${
           detected
-            ? 'border-emerald-400 bg-emerald-500/10'
-            : 'border-dashed border-emerald-500/40 animate-pulse'
+            ? 'border-emerald-400'
+            : 'border-dashed border-cyan-400/70 animate-pulse'
         }`}>
-          <div className="m-[12.5%] h-3/4 rounded-2xl border border-emerald-500/20" />
+          <div className="m-[12.5%] h-3/4 rounded-2xl border border-white/20" />
         </div>
       </div>
     </div>
