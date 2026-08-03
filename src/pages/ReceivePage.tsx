@@ -66,7 +66,7 @@ const RestoredFileActions: React.FC<{
 
 export const ReceivePage: React.FC<ReceivePageProps> = ({ setActiveTab }) => {
   const { t } = useI18n();
-  const { stream, error, videoRef, startCamera, stopCamera } = useCamera();
+  const { stream, error, cameras, selectedCameraId, videoRef, startCamera, selectCamera, stopCamera } = useCamera();
 
   const [isScanning, setIsScanning] = useState<boolean>(false);
   const [detected, setDetected] = useState<boolean>(false);
@@ -406,6 +406,35 @@ export const ReceivePage: React.FC<ReceivePageProps> = ({ setActiveTab }) => {
           </div>
 
           <CameraViewfinder videoRef={videoRef} detected={detected} />
+
+          {cameras.length > 1 && (
+            <label className="flex items-center gap-3 rounded-xl border border-neutral-800 bg-neutral-900/80 px-4 py-3 text-xs text-neutral-400">
+              <span className="shrink-0 font-mono">Объектив</span>
+              <select
+                value={selectedCameraId}
+                onChange={(event) => {
+                  setDetected(false);
+                  setSignalLevel('searching');
+                  void selectCamera(event.target.value);
+                }}
+                className="min-w-0 flex-1 rounded-lg border border-neutral-700 bg-neutral-950 px-3 py-2 text-white outline-none focus:border-cyan-500"
+              >
+                {cameras.map((camera, index) => (
+                  <option key={camera.deviceId} value={camera.deviceId}>
+                    {camera.label || `Камера ${index + 1}`}
+                  </option>
+                ))}
+              </select>
+              <span className="shrink-0">выберите 1×</span>
+            </label>
+          )}
+
+          {error && (
+            <div className="p-4 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-rose-400 shrink-0" />
+              <div>{error}</div>
+            </div>
+          )}
 
           {requiresPassword && (
             <div className="bg-neutral-900/80 rounded-2xl border border-neutral-800 p-4 flex flex-col sm:flex-row gap-3">

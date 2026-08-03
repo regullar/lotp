@@ -1,12 +1,21 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 
+const CAMERA_STORAGE_KEY = 'lotp-camera-id';
+
+export const cameraSourceConstraints = (deviceId?: string): MediaTrackConstraints =>
+  deviceId
+    ? { deviceId: { exact: deviceId } }
+    : { facingMode: { exact: 'environment' } };
+
 export function useCamera() {
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [cameras, setCameras] = useState<MediaDeviceInfo[]>([]);
+  const [selectedCameraId, setSelectedCameraId] = useState('');
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
-  const startCamera = useCallback(async () => {
+  const startCamera = useCallback(async (deviceId?: string) => {
     if (!window.isSecureContext) {
       setError('Chrome разрешает камеру на телефоне только по HTTPS. Откройте защищённую версию сайта.');
       return false;
@@ -18,28 +27,70 @@ export function useCamera() {
 
     try {
       setError(null);
-      const baseVideo: MediaTrackConstraints = {
-        facingMode: { ideal: 'environment' },
-        width: { ideal: 1280 },
-        height: { ideal: 960 },
-        aspectRatio: { ideal: 4 / 3 },
-      };
+      let storedCameraId = '';
+      if (!deviceId) {
+        try {
+          storedCameraId = localStorage.getItem(CAMERA_STORAGE_KEY) || '';
+        } catch {
+          // Storage can be unavailable in private browsing; camera access still works.
+        }
+      }
+
+      const requestedCameraId = deviceId || storedCameraId;
       let mediaStream: MediaStream;
       try {
         mediaStream = await navigator.mediaDevices.getUserMedia({
-          video: { ...baseVideo, frameRate: { exact: 60 } },
+          video: cameraSourceConstraints(requestedCameraId || undefined),
           audio: false,
         });
       } catch (cameraError) {
         if (cameraError instanceof DOMException && cameraError.name === 'NotAllowedError') throw cameraError;
+        if (!storedCameraId || deviceId) throw cameraError;
+        try {
+          localStorage.removeItem(CAMERA_STORAGE_KEY);
+        } catch {
+          // Ignore unavailable storage and retry the default rear camera.
+        }
         mediaStream = await navigator.mediaDevices.getUserMedia({
-          video: { ...baseVideo, frameRate: { ideal: 60 } },
+          video: cameraSourceConstraints(),
           audio: false,
         });
       }
+
+      const track = mediaStream.getVideoTracks()[0];
+      if (track) {
+        const capabilities = track.getCapabilities() as MediaTrackCapabilities & {
+          zoom?: { min: number; max: number };
+        };
+        const zoom = capabilities.zoom;
+        const constraints: MediaTrackConstraints = {
+          width: { ideal: 1920 },
+          height: { ideal: 1440 },
+          frameRate: { ideal: 30, max: 30 },
+          ...(zoom && zoom.min <= 1 && zoom.max >= 1
+            ? { advanced: [{ zoom: 1 } as MediaTrackConstraintSet] }
+            : {}),
+        };
+        await track.applyConstraints(constraints).catch(() => {});
+      }
+
       streamRef.current?.getTracks().forEach((track) => track.stop());
       streamRef.current = mediaStream;
       setStream(mediaStream);
+
+      const activeCameraId = track?.getSettings().deviceId || requestedCameraId;
+      setSelectedCameraId(activeCameraId);
+      if (deviceId) {
+        try {
+          localStorage.setItem(CAMERA_STORAGE_KEY, activeCameraId);
+        } catch {
+          // The selected camera remains active even when it cannot be persisted.
+        }
+      }
+
+      navigator.mediaDevices.enumerateDevices()
+        .then((devices) => setCameras(devices.filter((item) => item.kind === 'videoinput')))
+        .catch(() => setCameras([]));
       return true;
     } catch (err) {
       const name = err instanceof DOMException ? err.name : '';
@@ -73,8 +124,11 @@ export function useCamera() {
   return {
     stream,
     error,
+    cameras,
+    selectedCameraId,
     videoRef,
     startCamera,
+    selectCamera: startCamera,
     stopCamera,
   };
 }
