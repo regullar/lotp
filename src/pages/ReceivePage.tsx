@@ -5,12 +5,15 @@ import { SignalQualityBadge, SignalLevel } from '../components/SignalQualityBadg
 import { MetricCard } from '../components/MetricCard';
 import { useCamera } from '../hooks/useCamera';
 import { PROFILES, FrameType } from '../protocol/constants';
+import { BrowserQRCodeReader, type IScannerControls } from '@zxing/browser';
 import { ManifestSerializer, SessionManifest } from '../protocol/manifest';
 import { LTPeelingDecoder } from '../protocol/fountain/peeling';
 import { LTEncoder } from '../protocol/fountain/ltcode';
+import { FrameBuilder } from '../protocol/frame';
+import { TilePacker } from '../protocol/tile';
+import { decodeQRFrame } from '../protocol/qrFrame';
 import { LOTPContainer, ContainerFile } from '../protocol/container/lotpContainer';
 import { LOTPCrypto } from '../protocol/crypto/aesgcm';
-import type { Quadrilateral } from '../optical/detector/cornerDetector';
 import { useI18n } from '../hooks/useI18n';
 import { Camera, CheckCircle2, Download, AlertTriangle, ArrowLeft } from 'lucide-react';
 
@@ -31,16 +34,13 @@ export const ReceivePage: React.FC<ReceivePageProps> = ({ setActiveTab }) => {
   const { t } = useI18n();
   const { stream, error, videoRef, startCamera, stopCamera } = useCamera();
 
-  const [selectedProfile, setSelectedProfile] = useState<string>('reliable');
-  const profile = PROFILES[selectedProfile] || PROFILES.reliable;
+  const [profileName, setProfileName] = useState<string>('Автоматически');
 
   const [isScanning, setIsScanning] = useState<boolean>(false);
-  const [quad, setQuad] = useState<Quadrilateral | null>(null);
+  const [detected, setDetected] = useState<boolean>(false);
   const [signalLevel, setSignalLevel] = useState<SignalLevel>('searching');
-  const [tips, setTips] = useState<string[]>([]);
 
   // Session state
-  const [manifest, setManifest] = useState<SessionManifest | null>(null);
   const [decoder, setDecoder] = useState<LTPeelingDecoder | null>(null);
   const [decryptedPassword, setDecryptedPassword] = useState<string>('');
   const [requiresPassword, setRequiresPassword] = useState<boolean>(false);
@@ -56,109 +56,27 @@ export const ReceivePage: React.FC<ReceivePageProps> = ({ setActiveTab }) => {
   const [restoredFiles, setRestoredFiles] = useState<ContainerFile[]>([]);
   const [isCompleted, setIsCompleted] = useState<boolean>(false);
 
-  const workerRef = useRef<Worker | null>(null);
-  const animFrameRef = useRef<number | null>(null);
-  const lastTimeRef = useRef<number>(0);
-  const workerBusyRef = useRef<boolean>(false);
+  const scannerControlsRef = useRef<IScannerControls | null>(null);
+  const decoderRef = useRef<LTPeelingDecoder | null>(null);
+  const manifestRef = useRef<SessionManifest | null>(null);
+  const completedRef = useRef<boolean>(false);
+  const lastFrameSeqRef = useRef<number | null>(null);
+  const lastDecodeTimeRef = useRef<number>(0);
   const finishingRef = useRef<boolean>(false);
   const manifestFragmentsRef = useRef<{ id: number; fragments: Map<number, Uint8Array> } | null>(null);
   const finishReconstructionRef = useRef<() => Promise<void>>(async () => {});
-
-  useEffect(() => {
-    const worker = new Worker(new URL('../workers/scannerWorker.ts', import.meta.url), { type: 'module' });
-    workerRef.current = worker;
-
-    worker.onmessage = (e) => {
-      workerBusyRef.current = false;
-      const data = e.data;
-
-      if (data.type === 'NO_QUAD') {
-        setQuad(null);
-        setSignalLevel('searching');
-        setTips([t.tips.bringCloser]);
-        return;
-      }
-
-      if (data.type === 'ERROR' || data.type === 'HOMOGRAPHY_FAILED') {
-        setFramesCorrupted((prev) => prev + 1);
-        return;
-      }
-
-      if (data.type === 'FRAME_PROCESSED') {
-        setQuad(data.quad);
-        setSignalLevel(data.confidence > 0.6 ? 'excellent' : 'good');
-        setTips([]);
-        setFramesRead((prev) => prev + 1);
-
-        const { header, tile } = data;
-        if (!header || !tile) {
-          setFramesCorrupted((prev) => prev + 1);
-          return;
-        }
-
-        if (header.frameType === FrameType.MANIFEST && !manifest) {
-          const fragmentView = new DataView(tile.payload.buffer, tile.payload.byteOffset, tile.payload.byteLength);
-          const fragmentId = fragmentView.getUint16(0, false);
-          if (manifestFragmentsRef.current?.id !== fragmentId) {
-            manifestFragmentsRef.current = { id: fragmentId, fragments: new Map() };
-          }
-          manifestFragmentsRef.current.fragments.set(tile.payload[3], new Uint8Array(tile.payload));
-
-          const manifestBytes = ManifestSerializer.assemble(
-            Array.from(manifestFragmentsRef.current.fragments.values())
-          );
-          const parsedManifest = manifestBytes ? ManifestSerializer.decode(manifestBytes) : null;
-          if (parsedManifest) {
-            if (parsedManifest.blockSize !== profile.fountainBlockSize || parsedManifest.paletteMode !== profile.paletteMode) {
-              setRecoveryError('Профиль сканера не совпадает с профилем отправителя.');
-              return;
-            }
-            setManifest(parsedManifest);
-            const peeler = new LTPeelingDecoder(
-              parsedManifest.totalBlocks,
-              parsedManifest.blockSize,
-              parsedManifest.totalSize
-            );
-            setDecoder(peeler);
-            if (parsedManifest.isEncrypted) {
-              setRequiresPassword(true);
-            }
-          }
-        }
-
-        if (header.frameType === FrameType.DATA && decoder && tile) {
-          const wasComplete = decoder.isComplete();
-          const metadata = LTEncoder.getSymbolMetadata(tile.symbolId, decoder.getTotalBlocks());
-          const finished = decoder.addSymbol({
-            ...metadata,
-            data: tile.payload,
-          });
-
-          const prog = decoder.getProgress();
-          setRecoveryProgress(Math.round(prog * 100));
-
-          if (finished && !wasComplete && !isCompleted) {
-            setIsScanning(false);
-            void finishReconstructionRef.current();
-          }
-        }
-      }
-    };
-
-    return () => {
-      worker.terminate();
-      workerBusyRef.current = false;
-    };
-  }, [decoder, manifest, isCompleted, profile, t.tips.bringCloser]);
+  const qrHandlerRef = useRef<(text: string) => void>(() => {});
 
   const finishReconstruction = async () => {
-    if (!decoder || !manifest || finishingRef.current) return;
-    const rawContainer = decoder.reconstruct();
+    const currentDecoder = decoderRef.current;
+    const currentManifest = manifestRef.current;
+    if (!currentDecoder || !currentManifest || finishingRef.current) return;
+    const rawContainer = currentDecoder.reconstruct();
     if (!rawContainer) return;
 
     let payloadBytes = rawContainer;
 
-    if (manifest.isEncrypted) {
+    if (currentManifest.isEncrypted) {
       if (!decryptedPassword) {
         setRequiresPassword(true);
         return;
@@ -167,7 +85,7 @@ export const ReceivePage: React.FC<ReceivePageProps> = ({ setActiveTab }) => {
       finishingRef.current = true;
 
       try {
-        const { saltHex, noncePrefixHex } = manifest;
+        const { saltHex, noncePrefixHex } = currentManifest;
         if (!saltHex || !noncePrefixHex) throw new Error('Missing crypto metadata.');
         const salt = Uint8Array.from({ length: 16 }, (_, index) => parseInt(saltHex.slice(index * 2, index * 2 + 2), 16));
         const noncePrefix = Uint8Array.from({ length: 8 }, (_, index) => parseInt(noncePrefixHex.slice(index * 2, index * 2 + 2), 16));
@@ -189,6 +107,7 @@ export const ReceivePage: React.FC<ReceivePageProps> = ({ setActiveTab }) => {
         throw new Error('File checksum mismatch.');
       }
       setRestoredFiles(files);
+      completedRef.current = true;
       setIsCompleted(true);
       setIsScanning(false);
       setRecoveryError(null);
@@ -204,14 +123,103 @@ export const ReceivePage: React.FC<ReceivePageProps> = ({ setActiveTab }) => {
     finishReconstructionRef.current = finishReconstruction;
   });
 
+  const handleQRCode = (text: string) => {
+    const frameBytes = decodeQRFrame(text);
+    const matchedProfile = frameBytes && Object.values(PROFILES).find((candidate) =>
+      frameBytes.length === 11 + 14 + candidate.fountainBlockSize + candidate.rsEccBytes
+    );
+    if (!frameBytes || !matchedProfile) {
+      setFramesCorrupted((prev) => prev + 1);
+      return;
+    }
+
+    const header = FrameBuilder.unpackHeader(frameBytes.subarray(0, 11));
+    const tile = TilePacker.unpackTile(
+      frameBytes.subarray(11),
+      matchedProfile.rsEccBytes,
+      matchedProfile.fountainBlockSize
+    );
+    if (!header || !tile || header.frameSeq !== tile.frameSeq || header.paletteMode !== matchedProfile.paletteMode) {
+      setFramesCorrupted((prev) => prev + 1);
+      return;
+    }
+    if (lastFrameSeqRef.current === header.frameSeq) return;
+    lastFrameSeqRef.current = header.frameSeq;
+
+    const now = performance.now();
+    if (lastDecodeTimeRef.current) {
+      setCameraFPS(Math.round(1000 / Math.max(1, now - lastDecodeTimeRef.current)));
+    }
+    lastDecodeTimeRef.current = now;
+    setProfileName(matchedProfile.name);
+    setDetected(true);
+    setSignalLevel('excellent');
+    setFramesRead((prev) => prev + 1);
+
+    if (header.frameType === FrameType.MANIFEST && !manifestRef.current) {
+      const fragmentView = new DataView(tile.payload.buffer, tile.payload.byteOffset, tile.payload.byteLength);
+      const fragmentId = fragmentView.getUint16(0, false);
+      if (manifestFragmentsRef.current?.id !== fragmentId) {
+        manifestFragmentsRef.current = { id: fragmentId, fragments: new Map() };
+      }
+      manifestFragmentsRef.current.fragments.set(tile.payload[3], new Uint8Array(tile.payload));
+
+      const manifestBytes = ManifestSerializer.assemble(Array.from(manifestFragmentsRef.current.fragments.values()));
+      const parsedManifest = manifestBytes ? ManifestSerializer.decode(manifestBytes) : null;
+      if (parsedManifest) {
+        if (parsedManifest.blockSize !== matchedProfile.fountainBlockSize) {
+          setRecoveryError('Некорректный профиль в манифесте.');
+          return;
+        }
+        const peeler = new LTPeelingDecoder(
+          parsedManifest.totalBlocks,
+          parsedManifest.blockSize,
+          parsedManifest.totalSize
+        );
+        manifestRef.current = parsedManifest;
+        decoderRef.current = peeler;
+        setDecoder(peeler);
+        setRequiresPassword(parsedManifest.isEncrypted);
+      }
+      return;
+    }
+
+    const currentDecoder = decoderRef.current;
+    if (header.frameType !== FrameType.DATA || !currentDecoder) return;
+
+    const wasComplete = currentDecoder.isComplete();
+    const finished = currentDecoder.addSymbol({
+      ...LTEncoder.getSymbolMetadata(tile.symbolId, currentDecoder.getTotalBlocks()),
+      data: tile.payload,
+    });
+    setRecoveryProgress(Math.round(currentDecoder.getProgress() * 100));
+
+    if (finished && !wasComplete && !completedRef.current) {
+      setIsScanning(false);
+      void finishReconstructionRef.current();
+    }
+  };
+  useEffect(() => {
+    qrHandlerRef.current = handleQRCode;
+  });
+
   const handleStartScanning = async () => {
     const started = await startCamera();
     if (!started) return;
 
-    setManifest(null);
+    scannerControlsRef.current?.stop();
+    scannerControlsRef.current = null;
+    decoderRef.current = null;
+    manifestRef.current = null;
+    completedRef.current = false;
+    lastFrameSeqRef.current = null;
+    lastDecodeTimeRef.current = 0;
     setDecoder(null);
     manifestFragmentsRef.current = null;
     finishingRef.current = false;
+    setProfileName('Автоматически');
+    setDetected(false);
+    setSignalLevel('searching');
     setIsScanning(true);
     setIsCompleted(false);
     setFramesRead(0);
@@ -221,45 +229,34 @@ export const ReceivePage: React.FC<ReceivePageProps> = ({ setActiveTab }) => {
     setRequiresPassword(false);
     setDecryptedPassword('');
     setRestoredFiles([]);
-    setQuad(null);
-    setTips([]);
   };
 
   useEffect(() => {
-    if (!isScanning || !videoRef.current || !workerRef.current) return;
+    const video = videoRef.current;
+    if (!isScanning || !stream || !video) return;
 
-    const canvas = document.createElement('canvas');
-    canvas.width = 640;
-    canvas.height = 480;
-    const ctx = canvas.getContext('2d');
-
-    const processFrame = (timestamp: number) => {
-      const delta = timestamp - lastTimeRef.current;
-      lastTimeRef.current = timestamp;
-      setCameraFPS(Math.round(1000 / Math.max(1, delta)));
-
-      if (videoRef.current && ctx && videoRef.current.readyState >= 2 && !workerBusyRef.current) {
-        ctx.drawImage(videoRef.current, 0, 0, 640, 480);
-        const imgData = ctx.getImageData(0, 0, 640, 480);
-        workerBusyRef.current = true;
-        workerRef.current?.postMessage({
-          imageData: imgData,
-          rows: profile.gridRows,
-          cols: profile.gridCols,
-          paletteMode: profile.paletteMode,
-          rsEccBytes: profile.rsEccBytes,
-          payloadSize: profile.fountainBlockSize,
-        });
+    let active = true;
+    const reader = new BrowserQRCodeReader(undefined, {
+      delayBetweenScanAttempts: 50,
+      delayBetweenScanSuccess: 80,
+    });
+    void reader.decodeFromStream(stream, video, (result) => {
+      if (result) qrHandlerRef.current(result.getText());
+    }).then((controls) => {
+      if (active) scannerControlsRef.current = controls;
+      else controls.stop();
+    }).catch((scanError) => {
+      if (active) {
+        setRecoveryError(scanError instanceof Error ? scanError.message : 'Не удалось запустить QR-сканер.');
       }
+    });
 
-      animFrameRef.current = requestAnimationFrame(processFrame);
-    };
-
-    animFrameRef.current = requestAnimationFrame(processFrame);
     return () => {
-      if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+      active = false;
+      scannerControlsRef.current?.stop();
+      scannerControlsRef.current = null;
     };
-  }, [isScanning, videoRef, profile]);
+  }, [isScanning, stream, videoRef]);
 
   return (
     <div className="max-w-4xl mx-auto py-6 px-4 space-y-6">
@@ -279,25 +276,9 @@ export const ReceivePage: React.FC<ReceivePageProps> = ({ setActiveTab }) => {
           <div>
             <h2 className="text-xl font-bold text-white mb-2">{t.receiveFile}</h2>
             <p className="text-xs text-neutral-400 max-w-md mx-auto mb-4">
-              Allow camera access to align and decode the optical matrix feed from the sender device.
+              Разрешите доступ к камере и наведите её на QR-код на экране отправителя.
             </p>
-
-            {/* Profile Picker for Receiver */}
-            <div className="flex items-center justify-center gap-2 max-w-xs mx-auto text-xs font-mono mb-4">
-              <span className="text-neutral-400">Scanner Profile:</span>
-              <select
-                aria-label="Scanner profile"
-                value={selectedProfile}
-                onChange={(e) => setSelectedProfile(e.target.value)}
-                className="bg-neutral-950 text-emerald-400 border border-neutral-800 rounded-lg px-2.5 py-1 font-bold outline-none cursor-pointer"
-              >
-                {Object.values(PROFILES).slice(0, 3).map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name} ({p.gridRows}x{p.gridCols})
-                  </option>
-                ))}
-              </select>
-            </div>
+            <div className="text-xs font-mono text-emerald-400 mb-4">QR-профиль определится автоматически</div>
           </div>
 
           {error && (
@@ -348,10 +329,14 @@ export const ReceivePage: React.FC<ReceivePageProps> = ({ setActiveTab }) => {
       ) : (
         <div className="space-y-6">
           <div className="flex items-center justify-between">
-            <SignalQualityBadge level={signalLevel} confidence={quad?.confidence} />
+            <div className="flex items-center gap-3">
+              <SignalQualityBadge level={signalLevel} confidence={detected ? 1 : undefined} />
+              <span className="text-xs font-mono text-neutral-400">QR · {profileName}</span>
+            </div>
             <button
               type="button"
               onClick={() => {
+                scannerControlsRef.current?.stop();
                 stopCamera();
                 setIsScanning(false);
               }}
@@ -361,7 +346,7 @@ export const ReceivePage: React.FC<ReceivePageProps> = ({ setActiveTab }) => {
             </button>
           </div>
 
-          <CameraViewfinder videoRef={videoRef} quad={quad} tips={tips} />
+          <CameraViewfinder videoRef={videoRef} detected={detected} />
 
           {requiresPassword && (
             <div className="bg-neutral-900/80 rounded-2xl border border-neutral-800 p-4 flex flex-col sm:flex-row gap-3">

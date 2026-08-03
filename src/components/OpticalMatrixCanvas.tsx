@@ -1,20 +1,14 @@
 import React, { useRef, useEffect } from 'react';
-import { MatrixRenderer } from '../optical/renderer/matrixRenderer';
-import { PaletteMode } from '../protocol/constants';
+import QRCode from 'qrcode';
+import { encodeQRFrame } from '../protocol/qrFrame';
 
 interface OpticalMatrixCanvasProps {
-  rows: number;
-  cols: number;
-  paletteMode: PaletteMode;
   headerData: Uint8Array;
   tilesData: Uint8Array[];
   isFullscreen?: boolean;
 }
 
 export const OpticalMatrixCanvas: React.FC<OpticalMatrixCanvasProps> = ({
-  rows,
-  cols,
-  paletteMode,
   headerData,
   tilesData,
   isFullscreen,
@@ -25,15 +19,22 @@ export const OpticalMatrixCanvas: React.FC<OpticalMatrixCanvasProps> = ({
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    MatrixRenderer.renderFrame({
-      canvas,
-      rows,
-      cols,
-      paletteMode,
-      headerData,
-      tilesData,
+    if (!tilesData[0]) return;
+    void QRCode.toCanvas(canvas, encodeQRFrame(headerData, tilesData[0]), {
+      width: 512,
+      margin: 4,
+      errorCorrectionLevel: 'M',
+      color: { dark: '#000000', light: '#FFFFFF' },
+    }).catch(() => {
+      const context = canvas.getContext('2d');
+      context?.clearRect(0, 0, canvas.width, canvas.height);
+      if (context) {
+        context.fillStyle = '#991b1b';
+        context.font = 'bold 24px sans-serif';
+        context.fillText('QR generation failed', 120, 256);
+      }
     });
-  }, [rows, cols, paletteMode, headerData, tilesData]);
+  }, [headerData, tilesData]);
 
   return (
     <div className={`relative flex items-center justify-center bg-white p-4 rounded-2xl shadow-2xl ${isFullscreen ? 'w-screen h-screen fixed inset-0 z-50 p-8' : 'w-full aspect-square max-w-md mx-auto'}`}>

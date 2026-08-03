@@ -39,7 +39,7 @@ export const HomePage: React.FC<HomePageProps> = ({ setActiveTab }) => {
               <span className="text-sm font-mono text-emerald-400 group-hover:translate-x-1 transition-transform">→</span>
             </h2>
             <p className="text-xs text-neutral-400 leading-relaxed">
-              Encode any file into a high-speed LOTP optical light matrix stream. Zero network needed.
+              Encode any file into an animated LOTP QR stream. Zero network needed.
             </p>
           </div>
         </button>
@@ -58,7 +58,7 @@ export const HomePage: React.FC<HomePageProps> = ({ setActiveTab }) => {
               <span className="text-sm font-mono text-cyan-400 group-hover:translate-x-1 transition-transform">→</span>
             </h2>
             <p className="text-xs text-neutral-400 leading-relaxed">
-              Scan optical matrix stream with your camera and reconstruct files with fountain error correction.
+              Scan animated QR codes and reconstruct files with fountain error correction.
             </p>
           </div>
         </button>

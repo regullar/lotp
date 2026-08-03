@@ -13,7 +13,7 @@ export const SignalQualityBadge: React.FC<SignalQualityBadgeProps> = ({ level, c
     good: { label: 'Good Signal', bg: 'bg-cyan-500/10', border: 'border-cyan-500/40', text: 'text-cyan-400' },
     fair: { label: 'Fair Signal', bg: 'bg-amber-500/10', border: 'border-amber-500/40', text: 'text-amber-400' },
     poor: { label: 'Poor Signal', bg: 'bg-rose-500/10', border: 'border-rose-500/40', text: 'text-rose-400' },
-    searching: { label: 'Searching Matrix...', bg: 'bg-neutral-800', border: 'border-neutral-700', text: 'text-neutral-400' },
+    searching: { label: 'Searching QR...', bg: 'bg-neutral-800', border: 'border-neutral-700', text: 'text-neutral-400' },
   };
 
   const cfg = configs[level];

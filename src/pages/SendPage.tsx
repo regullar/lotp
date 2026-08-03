@@ -216,9 +216,6 @@ export const SendPage: React.FC<SendPageProps> = ({ setActiveTab }) => {
         <div className="space-y-6">
           <div className="bg-neutral-900/90 rounded-3xl border border-neutral-800 p-6 flex flex-col items-center gap-6 shadow-2xl">
             <OpticalMatrixCanvas
-              rows={profile.gridRows}
-              cols={profile.gridCols}
-              paletteMode={profile.paletteMode as PaletteMode}
               headerData={headerData}
               tilesData={tilesData}
               isFullscreen={isFullscreen}
