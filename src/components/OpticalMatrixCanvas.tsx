@@ -1,45 +1,78 @@
 import React, { useRef, useEffect } from 'react';
-import QRCode from 'qrcode';
 
 interface OpticalMatrixCanvasProps {
-  frameData: Uint8Array;
+  frameData: Uint8Array[];
   isFullscreen?: boolean;
+  onRendered?: () => void;
+  onError?: (message: string) => void;
 }
 
 export const OpticalMatrixCanvas: React.FC<OpticalMatrixCanvasProps> = ({
   frameData,
   isFullscreen,
+  onRendered,
+  onError,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const workerRef = useRef<Worker | null>(null);
+  const pendingRef = useRef<Uint8Array[] | null>(null);
+  const busyRef = useRef(false);
+  const callbacksRef = useRef({ onRendered, onError });
 
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
+    callbacksRef.current = { onRendered, onError };
+  }, [onRendered, onError]);
 
-    if (!frameData.length) return;
-    const segment = { data: frameData, mode: 'byte' } as unknown as QRCode.QRCodeSegment;
-    void QRCode.toCanvas(canvas, [segment], {
-      width: 512,
-      margin: 4,
-      errorCorrectionLevel: 'L',
-      color: { dark: '#000000', light: '#FFFFFF' },
-    }).catch(() => {
-      const context = canvas.getContext('2d');
-      context?.clearRect(0, 0, canvas.width, canvas.height);
-      if (context) {
-        context.fillStyle = '#991b1b';
-        context.font = 'bold 24px sans-serif';
-        context.fillText('QR generation failed', 120, 256);
+  useEffect(() => {
+    const worker = new Worker(new URL('../workers/qrRenderWorker.ts', import.meta.url), { type: 'module' });
+    workerRef.current = worker;
+    worker.onerror = (event) => {
+      busyRef.current = false;
+      callbacksRef.current.onError?.(event.message || 'QR renderer failed');
+    };
+    worker.onmessage = (event: MessageEvent<{ buffer?: ArrayBuffer; side?: number; error?: string }>) => {
+      busyRef.current = false;
+      if (event.data.error) callbacksRef.current.onError?.(event.data.error);
+      else if (event.data.buffer && event.data.side) {
+        const canvas = canvasRef.current;
+        const context = canvas?.getContext('2d');
+        if (canvas && context) {
+          canvas.width = event.data.side;
+          canvas.height = event.data.side;
+          context.putImageData(
+            new ImageData(new Uint8ClampedArray(event.data.buffer), event.data.side, event.data.side),
+            0,
+            0,
+          );
+          callbacksRef.current.onRendered?.();
+        }
       }
-    });
+      if (pendingRef.current) {
+        const next = pendingRef.current;
+        pendingRef.current = null;
+        busyRef.current = true;
+        worker.postMessage(next);
+      }
+    };
+    return () => worker.terminate();
+  }, []);
+
+  useEffect(() => {
+    if (!frameData.length || !workerRef.current) return;
+    if (busyRef.current) {
+      pendingRef.current = frameData;
+      return;
+    }
+    busyRef.current = true;
+    workerRef.current.postMessage(frameData);
   }, [frameData]);
 
   return (
-    <div className={`relative flex items-center justify-center bg-white p-4 rounded-2xl shadow-2xl ${isFullscreen ? 'w-screen h-screen fixed inset-0 z-50 p-8' : 'w-full aspect-square max-w-md mx-auto'}`}>
+    <div className={`relative flex items-center justify-center bg-white rounded-2xl overflow-hidden shadow-2xl ${isFullscreen ? 'w-screen h-screen fixed inset-0 z-50 p-2' : 'w-full aspect-square max-w-[580px] mx-auto'}`}>
       <canvas
         ref={canvasRef}
-        width={512}
-        height={512}
+        width={580}
+        height={580}
         className="w-full h-full object-contain image-rendering-pixelated rounded-lg border border-neutral-200"
       />
     </div>

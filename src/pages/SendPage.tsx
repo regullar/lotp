@@ -1,13 +1,17 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useRef } from 'react';
 import { FileSelector } from '../components/FileSelector';
 import { OpticalMatrixCanvas } from '../components/OpticalMatrixCanvas';
 import { MetricCard } from '../components/MetricCard';
-import { PROFILES, PaletteMode } from '../protocol/constants';
+import { PaletteMode } from '../protocol/constants';
 import { LOTPContainer } from '../protocol/container/lotpContainer';
 import { ManifestSerializer } from '../protocol/manifest';
-import { LTEncoder } from '../protocol/fountain/ltcode';
-import { fnv1a, packTransportFrame } from '../protocol/transportFrame';
+import {
+  createRaptorTransfer,
+  RAPTOR_MODE,
+  RAPTOR_SOURCE_BYTES,
+} from '../protocol/raptorTransport';
 import { LOTPCrypto } from '../protocol/crypto/aesgcm';
+import { compressIfUseful } from '../protocol/compression';
 import { useI18n } from '../hooks/useI18n';
 import { Play, Pause, Maximize2, ShieldAlert, ArrowLeft } from 'lucide-react';
 
@@ -19,7 +23,6 @@ export const SendPage: React.FC<SendPageProps> = ({ setActiveTab }) => {
   const { t } = useI18n();
 
   const [files, setFiles] = useState<File[]>([]);
-  const [selectedProfile, setSelectedProfile] = useState<string>('balanced');
   const [isEncrypted, setIsEncrypted] = useState<boolean>(false);
   const [password, setPassword] = useState<string>('');
   const [isTransmitting, setIsTransmitting] = useState<boolean>(false);
@@ -33,18 +36,18 @@ export const SendPage: React.FC<SendPageProps> = ({ setActiveTab }) => {
   const [avgSpeedBps, setAvgSpeedBps] = useState<number>(0);
   const [elapsedSec, setElapsedSec] = useState<number>(0);
 
-  const [frameData, setFrameData] = useState<Uint8Array>(() => new Uint8Array());
+  const [frameData, setFrameData] = useState<Uint8Array[]>([]);
 
-  const encoderRef = useRef<LTEncoder | null>(null);
-  const sessionIdRef = useRef<number>(0);
-  const payloadHashRef = useRef<number>(0);
-  const totalSizeRef = useRef<number>(0);
-  const animFrameRef = useRef<number | null>(null);
-  const lastTimeRef = useRef<number>(0);
+  const packetsRef = useRef<Uint8Array[]>([]);
+  const initialOrderRef = useRef<number[]>([]);
+  const loopOrderRef = useRef<number[]>([]);
+  const nextFrameRef = useRef<number>(0);
+  const timerRef = useRef<number | null>(null);
+  const transmittingRef = useRef(false);
+  const pausedRef = useRef(false);
+  const lastRenderedRef = useRef<number>(0);
+  const renderStartedRef = useRef<number>(0);
   const startTimeRef = useRef<number>(0);
-  const frameSeqRef = useRef<number>(0);
-
-  const profile = PROFILES[selectedProfile] || PROFILES.reliable;
 
   const handleFilesSelected = (newFiles: File[]) => {
     setFiles((prev) => [...prev, ...newFiles]);
@@ -66,7 +69,10 @@ export const SendPage: React.FC<SendPageProps> = ({ setActiveTab }) => {
         }))
       );
 
-      let containerData = await LOTPContainer.pack(fileItems);
+      const packedContainer = await LOTPContainer.pack(fileItems);
+      const compression = await compressIfUseful(packedContainer);
+      const isCompressed = compression.compressed;
+      let containerData = compression.data;
 
       let cryptoMeta: { saltHex: string; noncePrefixHex: string } | undefined;
       if (isEncrypted && password) {
@@ -78,89 +84,96 @@ export const SendPage: React.FC<SendPageProps> = ({ setActiveTab }) => {
         };
       }
 
-      const sessionId = crypto.getRandomValues(new Uint16Array(1))[0] || 1;
+      const sessionId = crypto.getRandomValues(new Uint32Array(1))[0] || 1;
       const manifest = await ManifestSerializer.create(
         String(sessionId),
         fileItems,
         containerData,
-        profile.fountainBlockSize,
-        profile.id,
-        profile.paletteMode as PaletteMode,
+        RAPTOR_SOURCE_BYTES,
+        'raptor-v30-l',
+        PaletteMode.MONO_1BIT,
         isEncrypted,
-        cryptoMeta
+        cryptoMeta,
+        isCompressed,
       );
       const manifestBytes = ManifestSerializer.encode(manifest);
       const transferData = new Uint8Array(manifestBytes.length + containerData.length);
       transferData.set(manifestBytes);
       transferData.set(containerData, manifestBytes.length);
 
-      const encoder = new LTEncoder(transferData, profile.fountainBlockSize, sessionId);
-      if (encoder.blockCount > 0xffff) {
-        throw new Error('Файл слишком большой для этого QR-профиля. Выберите более быстрый профиль.');
-      }
-      encoderRef.current = encoder;
-      sessionIdRef.current = sessionId;
-      payloadHashRef.current = fnv1a(transferData);
-      totalSizeRef.current = transferData.length;
-      setTotalK(encoder.blockCount);
+      const transfer = await createRaptorTransfer(transferData, sessionId);
+      packetsRef.current = transfer.packets;
+      initialOrderRef.current = transfer.initialOrder;
+      loopOrderRef.current = transfer.loopOrder;
+      nextFrameRef.current = 1;
+      setTotalK(transfer.sourcePackets);
       setSymbolId(0);
-      frameSeqRef.current = 0;
 
       startTimeRef.current = performance.now();
-      lastTimeRef.current = performance.now();
+      lastRenderedRef.current = 0;
+      renderStartedRef.current = performance.now();
+      transmittingRef.current = true;
+      pausedRef.current = false;
       setIsTransmitting(true);
       setIsPaused(false);
+      setFrameData(getDisplayFrame(0));
     } catch (startError) {
       setTransmissionError(startError instanceof Error ? startError.message : 'Не удалось подготовить передачу.');
     }
   };
 
-  useEffect(() => {
-    if (!isTransmitting || isPaused) return;
+  const getDisplayFrame = (frameIndex: number): Uint8Array[] => {
+    const initial = initialOrderRef.current;
+    const loop = loopOrderRef.current;
+    const frameCount = Math.ceil(initial.length / RAPTOR_MODE.parallel);
+    const order = frameIndex < frameCount ? initial : loop;
+    const start = (frameIndex % frameCount) * RAPTOR_MODE.parallel;
+    return Array.from({ length: RAPTOR_MODE.parallel }, (_, tile) =>
+      packetsRef.current[order[(start + tile) % order.length]],
+    );
+  };
 
-    const intervalMs = 1000 / profile.targetFPS;
+  const queueNextFrame = () => {
+    if (!transmittingRef.current || pausedRef.current) return;
+    const frameIndex = nextFrameRef.current++;
+    renderStartedRef.current = performance.now();
+    setFrameData(getDisplayFrame(frameIndex));
+  };
 
-    const loop = (timestamp: number) => {
-      const delta = timestamp - lastTimeRef.current;
-      if (delta >= intervalMs) {
-        lastTimeRef.current = timestamp;
+  const handleRendered = () => {
+    if (!transmittingRef.current) return;
+    const now = performance.now();
+    const delta = lastRenderedRef.current ? now - lastRenderedRef.current : 1000 / RAPTOR_MODE.fps;
+    lastRenderedRef.current = now;
+    const shown = nextFrameRef.current * RAPTOR_MODE.parallel;
+    const elapsed = (now - startTimeRef.current) / 1000;
+    setSymbolId(shown);
+    setElapsedSec(Math.round(elapsed));
+    setCurrentFPS(Math.min(RAPTOR_MODE.fps, Math.round(1000 / Math.max(1, delta))));
+    setAvgSpeedBps(Math.round(shown * RAPTOR_SOURCE_BYTES / Math.max(1, elapsed)));
+    if (!pausedRef.current) {
+      const renderTime = now - renderStartedRef.current;
+      timerRef.current = window.setTimeout(queueNextFrame, Math.max(0, 1000 / RAPTOR_MODE.fps - renderTime));
+    }
+  };
 
-        const encoder = encoderRef.current;
-        if (!encoder) return;
-        const currentSeq = frameSeqRef.current++;
-        setFrameData(packTransportFrame({
-          sessionId: sessionIdRef.current,
-          sequence: currentSeq,
-          blockCount: encoder.blockCount,
-          blockSize: encoder.blockSize,
-          totalSize: totalSizeRef.current,
-          payloadHash: payloadHashRef.current,
-        }, encoder.encode(currentSeq)));
-        setSymbolId(currentSeq + 1);
+  const togglePause = () => {
+    const nextPaused = !pausedRef.current;
+    pausedRef.current = nextPaused;
+    setIsPaused(nextPaused);
+    if (timerRef.current) window.clearTimeout(timerRef.current);
+    if (!nextPaused) queueNextFrame();
+  };
 
-        const now = performance.now();
-        const elapsed = (now - startTimeRef.current) / 1000;
-        setElapsedSec(Math.round(elapsed));
+  const stopTransmission = () => {
+    transmittingRef.current = false;
+    if (timerRef.current) window.clearTimeout(timerRef.current);
+    setIsTransmitting(false);
+  };
 
-        const fps = Math.round(1000 / Math.max(1, delta));
-        setCurrentFPS(fps);
-
-        const bytesEmitted = (currentSeq + 1) * profile.fountainBlockSize;
-        const bps = Math.round(bytesEmitted / Math.max(1, elapsed));
-        setAvgSpeedBps(bps);
-      }
-
-      animFrameRef.current = requestAnimationFrame(loop);
-    };
-
-    animFrameRef.current = requestAnimationFrame(loop);
-
-    return () => {
-      if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
-    };
-  }, [isTransmitting, isPaused, profile]);
-
-  const redundancyPercent = totalK > 0 ? Math.round((symbolId / totalK) * 100) : 0;
+  const redundancyPercent = totalK > 0
+    ? Math.min(RAPTOR_MODE.repairPercent, Math.max(0, Math.round((symbolId / totalK - 1) * 100)))
+    : 0;
 
   return (
     <div className="max-w-4xl mx-auto py-6 px-4 space-y-6">
@@ -182,8 +195,6 @@ export const SendPage: React.FC<SendPageProps> = ({ setActiveTab }) => {
             files={files}
             onFilesSelected={handleFilesSelected}
             onRemoveFile={handleRemoveFile}
-            selectedProfile={selectedProfile}
-            onProfileChange={setSelectedProfile}
             isEncrypted={isEncrypted}
             onEncryptionToggle={setIsEncrypted}
             password={password}
@@ -202,18 +213,26 @@ export const SendPage: React.FC<SendPageProps> = ({ setActiveTab }) => {
             <OpticalMatrixCanvas
               frameData={frameData}
               isFullscreen={isFullscreen}
+              onRendered={handleRendered}
+              onError={setTransmissionError}
             />
+
+            {transmissionError && (
+              <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-xs text-rose-300">
+                {transmissionError}
+              </div>
+            )}
 
             <div className="bg-neutral-950/80 border border-neutral-800 p-3 rounded-xl text-xs text-neutral-400 max-w-md text-center">
               <ShieldAlert className="w-4 h-4 text-emerald-400 inline mr-1.5" />
-              {t.redundancyHelp}
+              RaptorQ добавляет 20% ремонтных пакетов; поток повторяется до полного восстановления.
             </div>
 
             <div className="flex items-center gap-3">
               <button
                 type="button"
                 aria-label={isPaused ? 'Resume transmission' : 'Pause transmission'}
-                onClick={() => setIsPaused(!isPaused)}
+                onClick={togglePause}
                 className="p-3 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-white transition-colors"
               >
                 {isPaused ? <Play className="w-5 h-5 fill-current" /> : <Pause className="w-5 h-5" />}
@@ -228,7 +247,7 @@ export const SendPage: React.FC<SendPageProps> = ({ setActiveTab }) => {
               </button>
               <button
                 type="button"
-                onClick={() => setIsTransmitting(false)}
+                onClick={stopTransmission}
                 className="px-4 py-2.5 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 text-xs font-bold font-mono transition-colors"
               >
                 {t.stopTransmission}
@@ -240,13 +259,13 @@ export const SendPage: React.FC<SendPageProps> = ({ setActiveTab }) => {
             <MetricCard
               label={t.generatedRedundancy}
               value={`${redundancyPercent}%`}
-              subtext={`${symbolId} / ${totalK} symbols`}
+              subtext={`${symbolId} QR shown · ${totalK} source`}
               accent="emerald"
             />
             <MetricCard
               label="Display FPS"
               value={currentFPS}
-              subtext={`Target ${profile.targetFPS} FPS`}
+              subtext={`Target ${RAPTOR_MODE.fps} FPS`}
               accent="cyan"
             />
             <MetricCard

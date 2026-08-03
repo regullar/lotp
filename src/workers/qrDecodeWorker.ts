@@ -1,12 +1,4 @@
-// Adapted from decimen-optical-transfer (MIT, Copyright 2026 BashAlarmist).
-import { prepareZXingModule, readBarcodes } from 'zxing-wasm/reader';
-import wasmUrl from 'zxing-wasm/reader/zxing_reader.wasm?url';
-
-prepareZXingModule({
-  overrides: {
-    locateFile: (path: string, prefix: string) => path.endsWith('.wasm') ? wasmUrl : prefix + path,
-  },
-});
+import { decodeQRCodesFromCanvas } from '@raptorqr/core/qr/qr_decode';
 
 self.onmessage = async (event: MessageEvent) => {
   const { id, buffer, width, height } = event.data as {
@@ -17,14 +9,22 @@ self.onmessage = async (event: MessageEvent) => {
   };
   try {
     const image = new ImageData(new Uint8ClampedArray(buffer), width, height);
-    const results = await readBarcodes(image, { formats: ['QRCode'], maxNumberOfSymbols: 1 });
-    const result = results.find((candidate) => candidate.isValid && candidate.bytes.length > 0);
-    self.postMessage({ id, bytes: result?.bytes ?? null });
+    const results = await decodeQRCodesFromCanvas(image, {
+      maxSymbols: 4,
+      binarizer: 'LocalAverage',
+      tryHarder: false,
+      tryRotate: false,
+      tryInvert: false,
+      tryDownscale: true,
+      downscaleFactor: 3,
+    });
+    const frames = results.map((result) => result.bytes);
+    self.postMessage({ id, frames }, frames.map((frame) => frame.buffer));
   } catch {
-    self.postMessage({ id, bytes: null });
+    self.postMessage({ id, frames: [] });
   }
 };
 
-void readBarcodes(new ImageData(8, 8), { formats: ['QRCode'] })
+void decodeQRCodesFromCanvas(new ImageData(8, 8), 4)
   .catch(() => undefined)
-  .then(() => self.postMessage({ id: -1, bytes: null }));
+  .then(() => self.postMessage({ id: -1, frames: [] }));

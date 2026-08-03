@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { LOTPContainer } from '../protocol/container/lotpContainer';
+import { compressIfUseful, decompress } from '../protocol/compression';
 
 describe('LOTP Multi-File Binary Container', () => {
   it('packs and unpacks multiple files with Unicode names', async () => {
@@ -28,5 +29,12 @@ describe('LOTP Multi-File Binary Container', () => {
 
     expect(unpacked[1].name).toBe('image_sample.bin');
     expect(Array.from(unpacked[1].data)).toEqual(Array.from(file2Data));
+  });
+
+  it('compresses before transport and restores exact bytes', async () => {
+    const source = new TextEncoder().encode('RaptorQR '.repeat(2_000));
+    const compressed = await compressIfUseful(source);
+    expect(compressed.compressed).toBe(true);
+    expect(await decompress(compressed.data)).toEqual(source);
   });
 });

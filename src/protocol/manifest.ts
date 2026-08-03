@@ -22,6 +22,7 @@ export interface SessionManifest {
   profileId: string;
   paletteMode: PaletteMode;
   isEncrypted: boolean;
+  isCompressed: boolean;
   saltHex?: string;
   noncePrefixHex?: string;
   timestamp: number;
@@ -36,7 +37,8 @@ export class ManifestSerializer {
     profileId: string,
     paletteMode: PaletteMode,
     isEncrypted = false,
-    cryptoMeta?: { saltHex: string; noncePrefixHex: string }
+    cryptoMeta?: { saltHex: string; noncePrefixHex: string },
+    isCompressed = false,
   ): Promise<SessionManifest> {
     const [fileMetas, containerSha256] = await Promise.all([
       Promise.all(files.map(async (f): Promise<FileMetadata> => ({
@@ -62,6 +64,7 @@ export class ManifestSerializer {
       profileId,
       paletteMode,
       isEncrypted,
+      isCompressed,
       saltHex: cryptoMeta?.saltHex,
       noncePrefixHex: cryptoMeta?.noncePrefixHex,
       timestamp: Date.now(),
@@ -74,7 +77,7 @@ export class ManifestSerializer {
     buf.set(LOTP_MAGIC, 0);
     const view = new DataView(buf.buffer);
     buf[4] = LOTP_VERSION;
-    buf[5] = (encrypted ? 1 : 0) | (manifest.paletteMode << 1);
+    buf[5] = (encrypted ? 1 : 0) | (manifest.paletteMode << 1) | (manifest.isCompressed ? 8 : 0);
     view.setUint32(6, manifest.totalSize, false);
     view.setUint16(10, manifest.blockSize, false);
     view.setUint32(12, manifest.totalBlocks, false);
@@ -118,6 +121,7 @@ export class ManifestSerializer {
         profileId: '',
         paletteMode: ((data[5] >> 1) & 0x03) as PaletteMode,
         isEncrypted: encrypted,
+        isCompressed: (data[5] & 8) !== 0,
         saltHex: encrypted ? this.bytesToHex(data.subarray(16, 32)) : undefined,
         noncePrefixHex: encrypted ? this.bytesToHex(data.subarray(32, 40)) : undefined,
         timestamp: 0,

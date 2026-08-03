@@ -1,20 +1,21 @@
 import React, { useState, useEffect, useRef } from 'react';
 import confetti from 'canvas-confetti';
+import type { RaptorQWasmDecoder } from '@raptorqr/core/fec/raptorq_wasm';
 import { CameraViewfinder } from '../components/CameraViewfinder';
 import { SignalQualityBadge, SignalLevel } from '../components/SignalQualityBadge';
 import { MetricCard } from '../components/MetricCard';
 import { useCamera } from '../hooks/useCamera';
-import { PROFILES } from '../protocol/constants';
 import { ManifestSerializer } from '../protocol/manifest';
-import { LTDecoder } from '../protocol/fountain/fountain';
 import {
-  fnv1a,
-  parseTransportFrame,
-  transportIdentity,
-  type TransportHeader,
-} from '../protocol/transportFrame';
+  createRaptorDecoder,
+  parseRaptorFrame,
+  raptorFrameIdentity,
+  raptorPacketIdentity,
+  type RaptorFrame,
+} from '../protocol/raptorTransport';
 import { LOTPContainer, ContainerFile } from '../protocol/container/lotpContainer';
 import { LOTPCrypto } from '../protocol/crypto/aesgcm';
+import { decompress } from '../protocol/compression';
 import { useI18n } from '../hooks/useI18n';
 import { Camera, CheckCircle2, Download, Eye, AlertTriangle, ArrowLeft } from 'lucide-react';
 
@@ -67,14 +68,11 @@ export const ReceivePage: React.FC<ReceivePageProps> = ({ setActiveTab }) => {
   const { t } = useI18n();
   const { stream, error, videoRef, startCamera, stopCamera } = useCamera();
 
-  const [profileName, setProfileName] = useState<string>('Автоматически');
-
   const [isScanning, setIsScanning] = useState<boolean>(false);
   const [detected, setDetected] = useState<boolean>(false);
   const [signalLevel, setSignalLevel] = useState<SignalLevel>('searching');
 
   // Session state
-  const [decoder, setDecoder] = useState<LTDecoder | null>(null);
   const [decryptedPassword, setDecryptedPassword] = useState<string>('');
   const [requiresPassword, setRequiresPassword] = useState<boolean>(false);
   const [recoveryError, setRecoveryError] = useState<string | null>(null);
@@ -84,13 +82,17 @@ export const ReceivePage: React.FC<ReceivePageProps> = ({ setActiveTab }) => {
   const [framesCorrupted, setFramesCorrupted] = useState<number>(0);
   const [cameraFPS, setCameraFPS] = useState<number>(0);
   const [recoveryProgress, setRecoveryProgress] = useState<number>(0);
+  const [sourcePackets, setSourcePackets] = useState<number>(0);
 
   // Completed Files
   const [restoredFiles, setRestoredFiles] = useState<ContainerFile[]>([]);
   const [isCompleted, setIsCompleted] = useState<boolean>(false);
+  const [seenPackets] = useState(() => new Set<number>());
 
-  const decoderRef = useRef<LTDecoder | null>(null);
-  const transportHeaderRef = useRef<TransportHeader | null>(null);
+  const decoderRef = useRef<RaptorQWasmDecoder | null>(null);
+  const recoveredTransportRef = useRef<Uint8Array | null>(null);
+  const packetQueueRef = useRef<RaptorFrame[]>([]);
+  const processingRef = useRef(false);
   const streamKeyRef = useRef<string>('');
   const completedRef = useRef<boolean>(false);
   const lastDecodeTimeRef = useRef<number>(0);
@@ -99,15 +101,8 @@ export const ReceivePage: React.FC<ReceivePageProps> = ({ setActiveTab }) => {
   const qrHandlerRef = useRef<(bytes: Uint8Array) => void>(() => {});
 
   const finishReconstruction = async () => {
-    const currentDecoder = decoderRef.current;
-    const currentHeader = transportHeaderRef.current;
-    if (!currentDecoder || !currentHeader || finishingRef.current) return;
-    const transportPayload = currentDecoder.reconstruct();
-    if (!transportPayload) return;
-    if (fnv1a(transportPayload) !== currentHeader.payloadHash) {
-      setRecoveryError('Контрольная сумма QR-потока не совпала. Перезапустите передачу.');
-      return;
-    }
+    const transportPayload = recoveredTransportRef.current;
+    if (!transportPayload || finishingRef.current) return;
 
     const currentManifest = ManifestSerializer.decode(transportPayload);
     if (!currentManifest) {
@@ -147,6 +142,7 @@ export const ReceivePage: React.FC<ReceivePageProps> = ({ setActiveTab }) => {
     }
 
     try {
+      if (currentManifest.isCompressed) payloadBytes = await decompress(payloadBytes);
       const files = await LOTPContainer.unpack(payloadBytes);
       if (!files.length) throw new Error('Empty container.');
       const hashes = await Promise.all(files.map((file) => LOTPContainer.calcSHA256(file.data)));
@@ -170,59 +166,61 @@ export const ReceivePage: React.FC<ReceivePageProps> = ({ setActiveTab }) => {
     finishReconstructionRef.current = finishReconstruction;
   });
 
+  const processQueue = async () => {
+    if (processingRef.current) return;
+    processingRef.current = true;
+    try {
+      while (packetQueueRef.current.length && !completedRef.current) {
+        const frame = packetQueueRef.current.shift()!;
+        const identity = raptorFrameIdentity(frame);
+        if (!decoderRef.current || streamKeyRef.current !== identity) {
+          decoderRef.current = await createRaptorDecoder(frame);
+          recoveredTransportRef.current = null;
+          streamKeyRef.current = identity;
+          seenPackets.clear();
+          finishingRef.current = false;
+          setFramesRead(0);
+          setRecoveryProgress(0);
+          setRecoveryError(null);
+          setRequiresPassword(false);
+          setSourcePackets(Math.ceil(frame.packet.header.dataLength / Math.max(1, frame.packet.payload.length - 4)));
+        }
+
+        const packetId = raptorPacketIdentity(frame.packet);
+        if (seenPackets.has(packetId)) continue;
+        seenPackets.add(packetId);
+
+        const restored = decoderRef.current.push(frame.packet.payload);
+        const uniqueFrames = seenPackets.size;
+        setDetected(true);
+        setSignalLevel('excellent');
+        setFramesRead(uniqueFrames);
+        const expectedSource = Math.ceil(frame.packet.header.dataLength / Math.max(1, frame.packet.payload.length - 4));
+        setRecoveryProgress(restored ? 100 : Math.min(99, Math.round(uniqueFrames / expectedSource * 100)));
+
+        if (restored) {
+          recoveredTransportRef.current = restored;
+          setIsScanning(false);
+          await finishReconstructionRef.current();
+          break;
+        }
+      }
+    } catch {
+      setFramesCorrupted((previous) => previous + 1);
+    } finally {
+      processingRef.current = false;
+    }
+  };
+
   const handleQRCode = (bytes: Uint8Array) => {
-    const parsed = parseTransportFrame(bytes);
+    if (recoveredTransportRef.current) return;
+    const parsed = parseRaptorFrame(bytes);
     if (!parsed) {
       setFramesCorrupted((prev) => prev + 1);
       return;
     }
-    const { header, block } = parsed;
-    const matchedProfile = Object.values(PROFILES).find((candidate) =>
-      candidate.fountainBlockSize === header.blockSize
-    );
-    const identity = transportIdentity(header);
-    if (!decoderRef.current || streamKeyRef.current !== identity) {
-      const nextDecoder = new LTDecoder(
-        header.blockCount,
-        header.blockSize,
-        header.sessionId,
-        header.totalSize,
-      );
-      decoderRef.current = nextDecoder;
-      transportHeaderRef.current = header;
-      streamKeyRef.current = identity;
-      completedRef.current = false;
-      finishingRef.current = false;
-      setDecoder(nextDecoder);
-      setFramesRead(0);
-      setRecoveryProgress(0);
-      setRecoveryError(null);
-      setRequiresPassword(false);
-    }
-
-    const currentDecoder = decoderRef.current;
-    const framesBefore = currentDecoder.framesNew;
-    currentDecoder.addFrame(header.sequence, block);
-    if (currentDecoder.framesNew === framesBefore) return;
-
-    const now = performance.now();
-    if (lastDecodeTimeRef.current) {
-      setCameraFPS(Math.round(1000 / Math.max(1, now - lastDecodeTimeRef.current)));
-    }
-    lastDecodeTimeRef.current = now;
-    setProfileName(matchedProfile?.name ?? `${header.blockSize} B/frame`);
-    setDetected(true);
-    setSignalLevel('excellent');
-    setFramesRead(currentDecoder.framesNew);
-    const arrivalProgress = currentDecoder.framesNew / Math.max(1, currentDecoder.blockCount * 1.5);
-    const solvedProgress = currentDecoder.solvedCount / currentDecoder.blockCount;
-    setRecoveryProgress(currentDecoder.isComplete ? 100 : Math.min(99, Math.round(Math.max(arrivalProgress, solvedProgress) * 100)));
-
-    if (currentDecoder.isComplete && !completedRef.current) {
-      completedRef.current = true;
-      setIsScanning(false);
-      void finishReconstructionRef.current();
-    }
+    packetQueueRef.current.push(parsed);
+    void processQueue();
   };
   useEffect(() => {
     qrHandlerRef.current = handleQRCode;
@@ -233,13 +231,14 @@ export const ReceivePage: React.FC<ReceivePageProps> = ({ setActiveTab }) => {
     if (!started) return;
 
     decoderRef.current = null;
-    transportHeaderRef.current = null;
+    recoveredTransportRef.current = null;
+    packetQueueRef.current = [];
+    seenPackets.clear();
+    processingRef.current = false;
     streamKeyRef.current = '';
     completedRef.current = false;
     lastDecodeTimeRef.current = 0;
-    setDecoder(null);
     finishingRef.current = false;
-    setProfileName('Автоматически');
     setDetected(false);
     setSignalLevel('searching');
     setIsScanning(true);
@@ -247,6 +246,7 @@ export const ReceivePage: React.FC<ReceivePageProps> = ({ setActiveTab }) => {
     setFramesRead(0);
     setFramesCorrupted(0);
     setRecoveryProgress(0);
+    setSourcePackets(0);
     setRecoveryError(null);
     setRequiresPassword(false);
     setDecryptedPassword('');
@@ -267,23 +267,28 @@ export const ReceivePage: React.FC<ReceivePageProps> = ({ setActiveTab }) => {
     let frameId = 0;
     const noSignalTimer = window.setTimeout(() => {
       if (active && !decoderRef.current) {
-        setRecoveryError('Ни один QR-кадр не считан. Включите Reliable QR, поднесите камеру ближе и увеличьте яркость экрана.');
+        setRecoveryError('Ни один QR-кадр не считан. Поместите весь зелёный квадрат в кадр и увеличьте яркость экрана.');
       }
     }, 10_000);
 
     workers.forEach((worker, slot) => {
       worker.onmessage = (event: MessageEvent) => {
-        const { id, bytes } = event.data as { id: number; bytes: Uint8Array | null };
+        const { id, frames } = event.data as { id: number; frames: Uint8Array[] };
         if (id === -1) return;
         busy[slot] = false;
-        if (bytes) qrHandlerRef.current(bytes);
+        if (frames.length) {
+          const now = performance.now();
+          if (lastDecodeTimeRef.current) setCameraFPS(Math.round(1000 / Math.max(1, now - lastDecodeTimeRef.current)));
+          lastDecodeTimeRef.current = now;
+          frames.forEach((frame) => qrHandlerRef.current(frame));
+        }
       };
     });
 
     const capture = () => {
       const slot = busy.indexOf(false);
       if (slot === -1 || video.readyState < 2 || !video.videoWidth || !video.videoHeight) return;
-      const side = Math.floor(Math.min(video.videoWidth, video.videoHeight) * 0.8);
+      const side = Math.floor(Math.min(video.videoWidth, video.videoHeight) * 0.9);
       if (canvas.width !== side || canvas.height !== side) {
         canvas.width = side;
         canvas.height = side;
@@ -340,7 +345,7 @@ export const ReceivePage: React.FC<ReceivePageProps> = ({ setActiveTab }) => {
             <p className="text-xs text-neutral-400 max-w-md mx-auto mb-4">
               Разрешите доступ к камере и наведите её на QR-код на экране отправителя.
             </p>
-            <div className="text-xs font-mono text-emerald-400 mb-4">QR-профиль определится автоматически</div>
+            <div className="text-xs font-mono text-emerald-400 mb-4">Raptor Fast · 4 QR · автоматическое восстановление</div>
           </div>
 
           {error && (
@@ -386,7 +391,7 @@ export const ReceivePage: React.FC<ReceivePageProps> = ({ setActiveTab }) => {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <SignalQualityBadge level={signalLevel} confidence={detected ? 1 : undefined} />
-              <span className="text-xs font-mono text-neutral-400">QR · {profileName}</span>
+              <span className="text-xs font-mono text-neutral-400">4× QR v30-L · RaptorQ</span>
             </div>
             <button
               type="button"
@@ -413,16 +418,14 @@ export const ReceivePage: React.FC<ReceivePageProps> = ({ setActiveTab }) => {
                 placeholder="Пароль шифрования"
                 className="flex-1 rounded-xl bg-neutral-950 border border-neutral-700 px-4 py-3 text-sm text-white outline-none focus:border-cyan-500"
               />
-              {decoder?.isComplete && (
-                <button
-                  type="button"
-                  onClick={finishReconstruction}
-                  disabled={!decryptedPassword}
-                  className="px-5 py-3 rounded-xl bg-cyan-500 disabled:opacity-40 text-black font-bold text-sm"
-                >
-                  Восстановить
-                </button>
-              )}
+              <button
+                type="button"
+                onClick={finishReconstruction}
+                disabled={!decryptedPassword}
+                className="px-5 py-3 rounded-xl bg-cyan-500 disabled:opacity-40 text-black font-bold text-sm"
+              >
+                Восстановить
+              </button>
             </div>
           )}
 
@@ -450,7 +453,7 @@ export const ReceivePage: React.FC<ReceivePageProps> = ({ setActiveTab }) => {
             <MetricCard label={t.cameraFPS} value={cameraFPS} accent="cyan" />
             <MetricCard label={t.framesRead} value={framesRead} accent="neutral" />
             <MetricCard label={t.framesCorrupted} value={framesCorrupted} accent="rose" />
-            <MetricCard label={t.fountainBlocks} value={`${decoder?.solvedCount || 0}/${decoder?.blockCount || 0}`} accent="emerald" />
+            <MetricCard label="RaptorQ packets" value={`${framesRead}/${sourcePackets}`} accent="emerald" />
           </div>
         </div>
       )}

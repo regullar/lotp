@@ -1,14 +1,11 @@
 import React, { useRef } from 'react';
 import { Upload, FileText, Trash2, Lock } from 'lucide-react';
-import { PROFILES } from '../protocol/constants';
 import { useI18n } from '../hooks/useI18n';
 
 interface FileSelectorProps {
   files: File[];
   onFilesSelected: (files: File[]) => void;
   onRemoveFile: (index: number) => void;
-  selectedProfile: string;
-  onProfileChange: (profileId: string) => void;
   isEncrypted: boolean;
   onEncryptionToggle: (encrypted: boolean) => void;
   password: string;
@@ -26,8 +23,6 @@ export const FileSelector: React.FC<FileSelectorProps> = ({
   files,
   onFilesSelected,
   onRemoveFile,
-  selectedProfile,
-  onProfileChange,
   isEncrypted,
   onEncryptionToggle,
   password,
@@ -39,8 +34,7 @@ export const FileSelector: React.FC<FileSelectorProps> = ({
 
   const totalSize = files.reduce((acc, f) => acc + f.size, 0);
 
-  const currentProfile = PROFILES[selectedProfile] || PROFILES.reliable;
-  const estSpeedBps = currentProfile.targetFPS * currentProfile.fountainBlockSize * 0.8;
+  const estSpeedBps = 160 * 1024;
   const estSeconds = Math.max(2, Math.ceil(totalSize / estSpeedBps));
 
   const handleDrop = (e: React.DragEvent) => {
@@ -112,28 +106,9 @@ export const FileSelector: React.FC<FileSelectorProps> = ({
         </div>
       )}
 
-      <div className="space-y-2">
-        <div className="text-xs font-mono text-neutral-400 font-medium">{t.profile}</div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-          {Object.values(PROFILES).map((prof) => {
-            const isSelected = selectedProfile === prof.id;
-            return (
-              <button
-                type="button"
-                key={prof.id}
-                onClick={() => onProfileChange(prof.id)}
-                className={`p-3 rounded-xl border cursor-pointer text-left transition-colors ${
-                  isSelected
-                    ? 'border-emerald-500 bg-emerald-500/10 text-white shadow-md'
-                    : 'border-neutral-800 bg-neutral-900/60 text-neutral-400 hover:border-neutral-700'
-                }`}
-              >
-                <div className="font-bold text-sm text-white mb-1">{prof.name}</div>
-                <div className="text-xs text-neutral-400">{prof.description}</div>
-              </button>
-            );
-          })}
-        </div>
+      <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4">
+        <div className="font-bold text-sm text-white">Raptor Fast</div>
+        <div className="mt-1 text-xs text-neutral-400">4 QR · 30 FPS · RaptorQ 20% · автоматическое сжатие</div>
       </div>
 
       <div className="p-4 rounded-xl border border-neutral-800 bg-neutral-900/60 space-y-3">
