@@ -16,7 +16,7 @@ import {
 import { LOTPContainer, ContainerFile } from '../protocol/container/lotpContainer';
 import { LOTPCrypto } from '../protocol/crypto/aesgcm';
 import { useI18n } from '../hooks/useI18n';
-import { Camera, CheckCircle2, Download, AlertTriangle, ArrowLeft } from 'lucide-react';
+import { Camera, CheckCircle2, Download, Eye, AlertTriangle, ArrowLeft } from 'lucide-react';
 
 interface ReceivePageProps {
   setActiveTab: (tab: string) => void;
@@ -27,8 +27,18 @@ const downloadFile = (file: ContainerFile) => {
   const link = document.createElement('a');
   link.href = url;
   link.download = file.name;
+  document.body.appendChild(link);
   link.click();
-  URL.revokeObjectURL(url);
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
+};
+
+const canPreview = (mimeType: string) => /^(image|audio|video|text)\//.test(mimeType) || mimeType === 'application/pdf';
+
+const previewFile = (file: ContainerFile) => {
+  const url = URL.createObjectURL(new Blob([file.data.slice().buffer as ArrayBuffer], { type: file.mimeType }));
+  window.open(url, '_blank', 'noopener,noreferrer');
+  window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
 };
 
 export const ReceivePage: React.FC<ReceivePageProps> = ({ setActiveTab }) => {
@@ -57,7 +67,6 @@ export const ReceivePage: React.FC<ReceivePageProps> = ({ setActiveTab }) => {
   const [restoredFiles, setRestoredFiles] = useState<ContainerFile[]>([]);
   const [isCompleted, setIsCompleted] = useState<boolean>(false);
 
-  const workerBusyRef = useRef<boolean>(false);
   const decoderRef = useRef<LTDecoder | null>(null);
   const transportHeaderRef = useRef<TransportHeader | null>(null);
   const streamKeyRef = useRef<string>('');
@@ -131,7 +140,7 @@ export const ReceivePage: React.FC<ReceivePageProps> = ({ setActiveTab }) => {
 
       confetti({ particleCount: 120, spread: 80, origin: { y: 0.6 } });
     } catch {
-      setRecoveryError('Не удалось распаковать восстановленные данные. Запустите сканирование заново.');
+      setRecoveryError('Не удалось восстановить исходный файл. Запустите сканирование заново.');
       finishingRef.current = false;
     }
   };
@@ -226,8 +235,11 @@ export const ReceivePage: React.FC<ReceivePageProps> = ({ setActiveTab }) => {
     const video = videoRef.current;
     if (!isScanning || !stream || !video) return;
 
-    const worker = new Worker(new URL('../workers/qrDecodeWorker.ts', import.meta.url), { type: 'module' });
-    workerBusyRef.current = false;
+    const workerCount = Math.min(2, Math.max(1, navigator.hardwareConcurrency || 2));
+    const workers = Array.from({ length: workerCount }, () =>
+      new Worker(new URL('../workers/qrDecodeWorker.ts', import.meta.url), { type: 'module' })
+    );
+    const busy = workers.map(() => false);
     let active = true;
     const canvas = document.createElement('canvas');
     let frameId = 0;
@@ -237,25 +249,31 @@ export const ReceivePage: React.FC<ReceivePageProps> = ({ setActiveTab }) => {
       }
     }, 10_000);
 
-    worker.onmessage = (event: MessageEvent) => {
-      const { id, bytes } = event.data as { id: number; bytes: Uint8Array | null };
-      if (id === -1) return;
-      workerBusyRef.current = false;
-      if (bytes) qrHandlerRef.current(bytes);
-    };
+    workers.forEach((worker, slot) => {
+      worker.onmessage = (event: MessageEvent) => {
+        const { id, bytes } = event.data as { id: number; bytes: Uint8Array | null };
+        if (id === -1) return;
+        busy[slot] = false;
+        if (bytes) qrHandlerRef.current(bytes);
+      };
+    });
 
     const capture = () => {
-      if (workerBusyRef.current || video.readyState < 2 || !video.videoWidth || !video.videoHeight) return;
-      if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
+      const slot = busy.indexOf(false);
+      if (slot === -1 || video.readyState < 2 || !video.videoWidth || !video.videoHeight) return;
+      const side = Math.floor(Math.min(video.videoWidth, video.videoHeight) * 0.8);
+      if (canvas.width !== side || canvas.height !== side) {
+        canvas.width = side;
+        canvas.height = side;
       }
       const context = canvas.getContext('2d', { willReadFrequently: true });
       if (!context) return;
-      context.drawImage(video, 0, 0);
-      const image = context.getImageData(0, 0, canvas.width, canvas.height);
-      workerBusyRef.current = true;
-      worker.postMessage(
+      const sourceX = (video.videoWidth - side) / 2;
+      const sourceY = (video.videoHeight - side) / 2;
+      context.drawImage(video, sourceX, sourceY, side, side, 0, 0, side, side);
+      const image = context.getImageData(0, 0, side, side);
+      busy[slot] = true;
+      workers[slot].postMessage(
         { id: frameId++, buffer: image.data.buffer, width: canvas.width, height: canvas.height },
         [image.data.buffer],
       );
@@ -276,8 +294,7 @@ export const ReceivePage: React.FC<ReceivePageProps> = ({ setActiveTab }) => {
     return () => {
       active = false;
       window.clearTimeout(noSignalTimer);
-      worker.terminate();
-      workerBusyRef.current = false;
+      workers.forEach((worker) => worker.terminate());
     };
   }, [isScanning, stream, videoRef]);
 
@@ -337,14 +354,26 @@ export const ReceivePage: React.FC<ReceivePageProps> = ({ setActiveTab }) => {
                   <div className="font-semibold text-sm text-white truncate">{file.name}</div>
                   <div className="text-xs text-neutral-400 font-mono">{(file.size / 1024).toFixed(1)} KB</div>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => downloadFile(file)}
-                  className="px-4 py-2 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-black font-bold text-xs flex items-center gap-1.5 transition-colors"
-                >
-                  <Download className="w-4 h-4" />
-                  {t.downloadFile}
-                </button>
+                <div className="flex items-center gap-2">
+                  {canPreview(file.mimeType) && (
+                    <button
+                      type="button"
+                      onClick={() => previewFile(file)}
+                      className="px-3 py-2 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-white font-bold text-xs flex items-center gap-1.5 transition-colors"
+                    >
+                      <Eye className="w-4 h-4" />
+                      {t.viewFile}
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => downloadFile(file)}
+                    className="px-4 py-2 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-black font-bold text-xs flex items-center gap-1.5 transition-colors"
+                  >
+                    <Download className="w-4 h-4" />
+                    {t.downloadFile}
+                  </button>
+                </div>
               </div>
             ))}
           </div>

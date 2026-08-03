@@ -18,15 +18,25 @@ export function useCamera() {
 
     try {
       setError(null);
-      const mediaStream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: { ideal: 'environment' },
-          width: { ideal: 1280 },
-          height: { ideal: 960 },
-          aspectRatio: { ideal: 4 / 3 },
-        },
-        audio: false,
-      });
+      const baseVideo: MediaTrackConstraints = {
+        facingMode: { ideal: 'environment' },
+        width: { ideal: 1280 },
+        height: { ideal: 960 },
+        aspectRatio: { ideal: 4 / 3 },
+      };
+      let mediaStream: MediaStream;
+      try {
+        mediaStream = await navigator.mediaDevices.getUserMedia({
+          video: { ...baseVideo, frameRate: { exact: 60 } },
+          audio: false,
+        });
+      } catch (cameraError) {
+        if (cameraError instanceof DOMException && cameraError.name === 'NotAllowedError') throw cameraError;
+        mediaStream = await navigator.mediaDevices.getUserMedia({
+          video: { ...baseVideo, frameRate: { ideal: 60 } },
+          audio: false,
+        });
+      }
       streamRef.current?.getTracks().forEach((track) => track.stop());
       streamRef.current = mediaStream;
       setStream(mediaStream);

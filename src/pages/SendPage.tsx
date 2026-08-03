@@ -19,7 +19,7 @@ export const SendPage: React.FC<SendPageProps> = ({ setActiveTab }) => {
   const { t } = useI18n();
 
   const [files, setFiles] = useState<File[]>([]);
-  const [selectedProfile, setSelectedProfile] = useState<string>('reliable');
+  const [selectedProfile, setSelectedProfile] = useState<string>('balanced');
   const [isEncrypted, setIsEncrypted] = useState<boolean>(false);
   const [password, setPassword] = useState<string>('');
   const [isTransmitting, setIsTransmitting] = useState<boolean>(false);

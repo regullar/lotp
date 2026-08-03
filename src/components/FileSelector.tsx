@@ -16,6 +16,12 @@ interface FileSelectorProps {
   onStart: () => void;
 }
 
+const formatSize = (bytes: number) => {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+};
+
 export const FileSelector: React.FC<FileSelectorProps> = ({
   files,
   onFilesSelected,
@@ -33,14 +39,8 @@ export const FileSelector: React.FC<FileSelectorProps> = ({
 
   const totalSize = files.reduce((acc, f) => acc + f.size, 0);
 
-  const formatSize = (bytes: number) => {
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
-  };
-
   const currentProfile = PROFILES[selectedProfile] || PROFILES.reliable;
-  const estSpeedBps = currentProfile.targetFPS * currentProfile.fountainBlockSize * (currentProfile.paletteMode === 0 ? 0.5 : 1.2);
+  const estSpeedBps = currentProfile.targetFPS * currentProfile.fountainBlockSize * 0.8;
   const estSeconds = Math.max(2, Math.ceil(totalSize / estSpeedBps));
 
   const handleDrop = (e: React.DragEvent) => {
@@ -52,27 +52,28 @@ export const FileSelector: React.FC<FileSelectorProps> = ({
 
   return (
     <div className="space-y-6">
-      <div
+      <input
+        ref={inputRef}
+        type="file"
+        multiple
+        className="hidden"
+        onChange={(e) => {
+          if (e.target.files) onFilesSelected(Array.from(e.target.files));
+        }}
+      />
+      <button
+        type="button"
         onDragOver={(e) => e.preventDefault()}
         onDrop={handleDrop}
         onClick={() => inputRef.current?.click()}
-        className="border-2 border-dashed border-neutral-700 hover:border-emerald-500/60 bg-neutral-900/40 hover:bg-neutral-900/80 rounded-2xl p-8 text-center cursor-pointer transition-all group"
+        className="w-full border-2 border-dashed border-neutral-700 hover:border-emerald-500/60 bg-neutral-900/40 hover:bg-neutral-900/80 rounded-2xl p-8 text-center cursor-pointer transition-colors group"
       >
-        <input
-          ref={inputRef}
-          type="file"
-          multiple
-          className="hidden"
-          onChange={(e) => {
-            if (e.target.files) onFilesSelected(Array.from(e.target.files));
-          }}
-        />
         <div className="w-12 h-12 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 mx-auto mb-3 group-hover:scale-110 transition-transform">
           <Upload className="w-6 h-6" />
         </div>
         <h3 className="font-semibold text-white text-base mb-1">{t.selectFiles}</h3>
         <p className="text-xs text-neutral-400">{t.dropFilesHere}</p>
-      </div>
+      </button>
 
       {files.length > 0 && (
         <div className="bg-neutral-900/80 rounded-xl border border-neutral-800 p-4 space-y-3">
@@ -84,7 +85,7 @@ export const FileSelector: React.FC<FileSelectorProps> = ({
           <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
             {files.map((file, idx) => (
               <div
-                key={idx}
+                key={`${file.name}-${file.size}-${file.lastModified}`}
                 className="flex items-center justify-between p-2.5 rounded-lg bg-neutral-950/60 border border-neutral-800 text-xs"
               >
                 <div className="flex items-center gap-2 truncate">
@@ -94,6 +95,8 @@ export const FileSelector: React.FC<FileSelectorProps> = ({
                 <div className="flex items-center gap-3">
                   <span className="text-neutral-400 font-mono">{formatSize(file.size)}</span>
                   <button
+                    type="button"
+                    aria-label={`Удалить ${file.name}`}
                     onClick={(e) => {
                       e.stopPropagation();
                       onRemoveFile(idx);
@@ -110,15 +113,16 @@ export const FileSelector: React.FC<FileSelectorProps> = ({
       )}
 
       <div className="space-y-2">
-        <label className="text-xs font-mono text-neutral-400 font-medium">{t.profile}</label>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          {Object.values(PROFILES).slice(0, 3).map((prof) => {
+        <div className="text-xs font-mono text-neutral-400 font-medium">{t.profile}</div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          {Object.values(PROFILES).map((prof) => {
             const isSelected = selectedProfile === prof.id;
             return (
-              <div
+              <button
+                type="button"
                 key={prof.id}
                 onClick={() => onProfileChange(prof.id)}
-                className={`p-3 rounded-xl border cursor-pointer transition-all ${
+                className={`p-3 rounded-xl border cursor-pointer text-left transition-colors ${
                   isSelected
                     ? 'border-emerald-500 bg-emerald-500/10 text-white shadow-md'
                     : 'border-neutral-800 bg-neutral-900/60 text-neutral-400 hover:border-neutral-700'
@@ -126,7 +130,7 @@ export const FileSelector: React.FC<FileSelectorProps> = ({
               >
                 <div className="font-bold text-sm text-white mb-1">{prof.name}</div>
                 <div className="text-xs text-neutral-400">{prof.description}</div>
-              </div>
+              </button>
             );
           })}
         </div>
@@ -140,6 +144,7 @@ export const FileSelector: React.FC<FileSelectorProps> = ({
           </div>
           <input
             type="checkbox"
+            aria-label={t.encryption}
             checked={isEncrypted}
             onChange={(e) => onEncryptionToggle(e.target.checked)}
             className="w-4 h-4 rounded border-neutral-700 text-emerald-500 focus:ring-emerald-500 bg-neutral-950"
@@ -162,9 +167,10 @@ export const FileSelector: React.FC<FileSelectorProps> = ({
           {t.estimatedTime}: ~{estSeconds}s
         </div>
         <button
+          type="button"
           disabled={files.length === 0 || (isEncrypted && !password)}
           onClick={onStart}
-          className="px-6 py-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 disabled:cursor-not-allowed text-black font-bold text-sm tracking-wide shadow-lg shadow-emerald-500/20 transition-all"
+          className="px-6 py-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 disabled:cursor-not-allowed text-black font-bold text-sm tracking-wide shadow-lg shadow-emerald-500/20 transition-colors"
         >
           {t.startTransmission}
         </button>

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import QRCode from 'qrcode';
 import { prepareZXingModule, readBarcodes } from 'zxing-wasm/reader';
-import { PaletteMode } from '../protocol/constants';
+import { PaletteMode, PROFILES } from '../protocol/constants';
 import { LTDecoder, LTEncoder } from '../protocol/fountain/fountain';
 import { ManifestSerializer } from '../protocol/manifest';
 import { LOTPContainer } from '../protocol/container/lotpContainer';
@@ -14,23 +14,26 @@ import {
 } from '../protocol/transportFrame';
 
 describe('receiver recovery pipeline', () => {
-  it('decodes the exact raw QR bytes produced by the sender with ZXing WASM', async () => {
-    const frame = Uint8Array.from({ length: 148 }, (_, index) => (index * 37) & 0xff);
+  it('decodes the exact raw QR bytes from the fastest profiles with ZXing WASM', async () => {
     prepareZXingModule({
       overrides: {
         wasmBinary: readFileSync(new URL('../../node_modules/zxing-wasm/dist/reader/zxing_reader.wasm', import.meta.url)),
       },
     });
-    const segment = { data: frame, mode: 'byte' } as unknown as QRCode.QRCodeSegment;
-    const png = await QRCode.toBuffer([segment], {
-      errorCorrectionLevel: 'M',
-      margin: 4,
-      width: 512,
-    });
-    const decoded = await readBarcodes(png, { formats: ['QRCode'], maxNumberOfSymbols: 1 });
 
-    expect(decoded[0]?.isValid).toBe(true);
-    expect(decoded[0]?.bytes).toEqual(frame);
+    for (const profile of [PROFILES.fast, PROFILES.turbo]) {
+      const frame = Uint8Array.from({ length: profile.fountainBlockSize + 20 }, (_, index) => (index * 37) & 0xff);
+      const segment = { data: frame, mode: 'byte' } as unknown as QRCode.QRCodeSegment;
+      const png = await QRCode.toBuffer([segment], {
+        errorCorrectionLevel: 'L',
+        margin: 4,
+        width: 512,
+      });
+      const decoded = await readBarcodes(png, { formats: ['QRCode'], maxNumberOfSymbols: 1 });
+
+      expect(decoded[0]?.isValid).toBe(true);
+      expect(decoded[0]?.bytes).toEqual(frame);
+    }
   });
 
   it('recovers a real container from self-describing QR frames in any order', async () => {

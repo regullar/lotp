@@ -42,6 +42,7 @@ export const translations = {
     fountainBlocks: 'Восстановлено блоков',
     reconstructionProgress: 'Прогресс восстановления',
     fileRestored: 'Файл успешно восстановлен!',
+    viewFile: 'Открыть',
     downloadFile: 'Скачать файл',
     verifyHash: 'SHA-256 проверен',
     tips: {
@@ -94,6 +95,7 @@ export const translations = {
     fountainBlocks: 'Blocks Recovered',
     reconstructionProgress: 'Reconstruction Progress',
     fileRestored: 'File successfully restored!',
+    viewFile: 'Open',
     downloadFile: 'Download File',
     verifyHash: 'SHA-256 Verified',
     tips: {

@@ -21,7 +21,7 @@ export const OpticalMatrixCanvas: React.FC<OpticalMatrixCanvasProps> = ({
     void QRCode.toCanvas(canvas, [segment], {
       width: 512,
       margin: 4,
-      errorCorrectionLevel: 'M',
+      errorCorrectionLevel: 'L',
       color: { dark: '#000000', light: '#FFFFFF' },
     }).catch(() => {
       const context = canvas.getContext('2d');
