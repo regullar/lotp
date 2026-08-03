@@ -8,7 +8,7 @@ import { FrameBuilder } from '../protocol/frame';
 import { TilePacker } from '../protocol/tile';
 
 self.onmessage = (e: MessageEvent) => {
-  const { imageData, rows, cols, paletteMode, rsEccBytes } = e.data;
+  const { imageData, rows, cols, paletteMode, rsEccBytes, payloadSize } = e.data;
 
   try {
     // 1. Detect Screen Bounding Quad
@@ -26,7 +26,7 @@ self.onmessage = (e: MessageEvent) => {
       { x: 1, y: 1 },
       { x: 0, y: 1 },
     ];
-    const H = Homography.findHomography(srcPts, dstPts);
+    const H = Homography.findHomography(dstPts, srcPts);
     if (!H) {
       self.postMessage({ type: 'HOMOGRAPHY_FAILED' });
       return;
@@ -68,8 +68,11 @@ self.onmessage = (e: MessageEvent) => {
 
     // Unpack Frame Header & Tiles
     const header = FrameBuilder.unpackHeader(decodedBytes.subarray(0, 11));
-    const tilePayload = decodedBytes.subarray(11);
-    const tile = TilePacker.unpackTile(tilePayload, rsEccBytes);
+    const tile = TilePacker.unpackTile(decodedBytes.subarray(11), rsEccBytes, payloadSize);
+    if (header && tile && header.frameSeq !== tile.frameSeq) {
+      self.postMessage({ type: 'FRAME_PROCESSED', quad, header: null, tile: null, confidence: quad.confidence });
+      return;
+    }
 
     self.postMessage({
       type: 'FRAME_PROCESSED',

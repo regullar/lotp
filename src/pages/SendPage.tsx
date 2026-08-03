@@ -33,11 +33,12 @@ export const SendPage: React.FC<SendPageProps> = ({ setActiveTab }) => {
   const [avgSpeedBps, setAvgSpeedBps] = useState<number>(0);
   const [elapsedSec, setElapsedSec] = useState<number>(0);
 
-  const [headerData, setHeaderData] = useState<Uint8Array>(new Uint8Array(11));
+  const [headerData, setHeaderData] = useState<Uint8Array>(() => new Uint8Array(11));
   const [tilesData, setTilesData] = useState<Uint8Array[]>([]);
 
   const encoderRef = useRef<LTEncoder | null>(null);
-  const manifestBytesRef = useRef<Uint8Array | null>(null);
+  const manifestChunksRef = useRef<Uint8Array[]>([]);
+  const manifestChunkIndexRef = useRef<number>(0);
   const animFrameRef = useRef<number | null>(null);
   const lastTimeRef = useRef<number>(0);
   const startTimeRef = useRef<number>(0);
@@ -86,7 +87,11 @@ export const SendPage: React.FC<SendPageProps> = ({ setActiveTab }) => {
       isEncrypted,
       cryptoMeta
     );
-    manifestBytesRef.current = ManifestSerializer.encode(manifest);
+    manifestChunksRef.current = ManifestSerializer.fragment(
+      ManifestSerializer.encode(manifest),
+      profile.fountainBlockSize
+    );
+    manifestChunkIndexRef.current = 0;
 
     const encoder = new LTEncoder(containerData, profile.fountainBlockSize);
     encoderRef.current = encoder;
@@ -113,18 +118,24 @@ export const SendPage: React.FC<SendPageProps> = ({ setActiveTab }) => {
         frameSeqRef.current++;
         const currentSeq = frameSeqRef.current;
 
-        const isManifestFrame = currentSeq % 30 === 1 && manifestBytesRef.current;
+        const manifestEveryFrames = Math.max(1, Math.round(profile.manifestIntervalMs / intervalMs));
+        const isManifestFrame = manifestChunksRef.current.length > 0
+          && (currentSeq <= manifestChunksRef.current.length || currentSeq % manifestEveryFrames === 1);
 
         let frameTypeVal: number = FrameType.DATA;
         let payload: Uint8Array;
+        let tileSymbolId = symbolId;
 
         if (isManifestFrame) {
           frameTypeVal = FrameType.MANIFEST;
-          payload = manifestBytesRef.current!;
+          tileSymbolId = manifestChunkIndexRef.current % manifestChunksRef.current.length;
+          payload = manifestChunksRef.current[tileSymbolId];
+          manifestChunkIndexRef.current++;
         } else if (encoderRef.current) {
           const currentSymId = symbolId;
           const sym = encoderRef.current.generateSymbol(currentSymId);
           payload = sym.data;
+          tileSymbolId = currentSymId;
           setSymbolId((prev) => prev + 1);
         } else {
           payload = new Uint8Array(profile.fountainBlockSize);
@@ -140,7 +151,7 @@ export const SendPage: React.FC<SendPageProps> = ({ setActiveTab }) => {
         const tile = TilePacker.packTile(
           0,
           currentSeq,
-          symbolId,
+          tileSymbolId,
           payload,
           profile.rsEccBytes
         );
@@ -175,6 +186,7 @@ export const SendPage: React.FC<SendPageProps> = ({ setActiveTab }) => {
   return (
     <div className="max-w-4xl mx-auto py-6 px-4 space-y-6">
       <button
+        type="button"
         onClick={() => setActiveTab('send')}
         className="flex items-center gap-2 text-xs font-mono text-neutral-400 hover:text-white transition-colors"
       >
@@ -219,18 +231,23 @@ export const SendPage: React.FC<SendPageProps> = ({ setActiveTab }) => {
 
             <div className="flex items-center gap-3">
               <button
+                type="button"
+                aria-label={isPaused ? 'Resume transmission' : 'Pause transmission'}
                 onClick={() => setIsPaused(!isPaused)}
                 className="p-3 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-white transition-colors"
               >
                 {isPaused ? <Play className="w-5 h-5 fill-current" /> : <Pause className="w-5 h-5" />}
               </button>
               <button
+                type="button"
+                aria-label="Toggle fullscreen"
                 onClick={() => setIsFullscreen(!isFullscreen)}
                 className="p-3 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-white transition-colors"
               >
                 <Maximize2 className="w-5 h-5" />
               </button>
               <button
+                type="button"
                 onClick={() => setIsTransmitting(false)}
                 className="px-4 py-2.5 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 text-xs font-bold font-mono transition-colors"
               >

@@ -38,8 +38,15 @@ export class TilePacker {
 
   public static unpackTile(
     tileData: Uint8Array,
-    rsEccBytes: number
+    rsEccBytes: number,
+    payloadSize?: number
   ): DataTile | null {
+    if (payloadSize !== undefined) {
+      const encodedSize = 14 + payloadSize + rsEccBytes;
+      if (tileData.length < encodedSize) return null;
+      tileData = tileData.subarray(0, encodedSize);
+    }
+
     let rawBuf: Uint8Array | null = tileData;
 
     if (rsEccBytes > 0) {

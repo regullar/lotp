@@ -37,7 +37,7 @@ export class LTEncoder {
     return this.blockSize;
   }
 
-  private prng(seed: number): () => number {
+  private static prng(seed: number): () => number {
     let s = seed >>> 0;
     return () => {
       s = (Math.imul(s, 1664525) + 1013904223) >>> 0;
@@ -46,41 +46,56 @@ export class LTEncoder {
   }
 
   public getDegree(seed: number): number {
-    if (this.K === 1) return 1;
+    return LTEncoder.getDegreeForK(seed, this.K);
+  }
+
+  private static getDegreeForK(seed: number, K: number): number {
+    if (K === 1) return 1;
     const rand = this.prng(seed)();
 
-    if (rand < 1 / this.K) return 1;
-    const d = Math.min(this.K, Math.floor(1 / rand));
-    return Math.max(1, Math.min(this.K, d));
+    if (rand < 1 / K) return 1;
+    const d = Math.min(K, Math.floor(1 / rand));
+    return Math.max(1, Math.min(K, d));
   }
 
   public getBlockIndices(seed: number, degree: number): number[] {
-    if (degree >= this.K) {
-      return Array.from({ length: this.K }, (_, i) => i);
+    return LTEncoder.getBlockIndicesForK(seed, degree, this.K);
+  }
+
+  private static getBlockIndicesForK(seed: number, degree: number, K: number): number[] {
+    if (degree >= K) {
+      return Array.from({ length: K }, (_, i) => i);
     }
     const rand = this.prng(seed + 1000);
     const indices = new Set<number>();
     while (indices.size < degree) {
-      const idx = Math.floor(rand() * this.K);
+      const idx = Math.floor(rand() * K);
       indices.add(idx);
     }
     return Array.from(indices);
   }
 
-  public generateSymbol(symbolId: number): FountainSymbol {
-    if (symbolId < this.K) {
-      return {
-        symbolId,
-        seed: symbolId,
-        degree: 1,
-        blockIndices: [symbolId],
-        data: new Uint8Array(this.blocks[symbolId]),
-      };
+  public static getSymbolMetadata(symbolId: number, K: number): Omit<FountainSymbol, 'data'> {
+    if (!Number.isInteger(symbolId) || symbolId < 0 || !Number.isInteger(K) || K < 1) {
+      throw new Error('Invalid fountain symbol metadata.');
+    }
+    if (symbolId < K) {
+      return { symbolId, seed: symbolId, degree: 1, blockIndices: [symbolId] };
     }
 
     const seed = (symbolId * 2654435761) >>> 0;
-    const degree = this.getDegree(seed);
-    const blockIndices = this.getBlockIndices(seed, degree);
+    const degree = this.getDegreeForK(seed, K);
+    return {
+      symbolId,
+      seed,
+      degree,
+      blockIndices: this.getBlockIndicesForK(seed, degree, K),
+    };
+  }
+
+  public generateSymbol(symbolId: number): FountainSymbol {
+    const metadata = LTEncoder.getSymbolMetadata(symbolId, this.K);
+    const { blockIndices } = metadata;
 
     const data = new Uint8Array(this.blockSize);
     for (const idx of blockIndices) {
@@ -91,10 +106,7 @@ export class LTEncoder {
     }
 
     return {
-      symbolId,
-      seed,
-      degree,
-      blockIndices,
+      ...metadata,
       data,
     };
   }

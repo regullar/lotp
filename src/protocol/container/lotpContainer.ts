@@ -15,7 +15,7 @@ export interface ContainerFile {
 
 export class LOTPContainer {
   public static async calcSHA256(data: Uint8Array): Promise<string> {
-    const hashBuf = await crypto.subtle.digest('SHA-256', data.buffer as ArrayBuffer);
+    const hashBuf = await crypto.subtle.digest('SHA-256', data.slice().buffer as ArrayBuffer);
     return Array.from(new Uint8Array(hashBuf))
       .map((b) => b.toString(16).padStart(2, '0'))
       .join('');

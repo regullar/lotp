@@ -57,7 +57,7 @@ export class LOTPCrypto {
         iv: iv.buffer as ArrayBuffer,
       },
       key,
-      data.buffer as ArrayBuffer
+      data.slice().buffer as ArrayBuffer
     );
 
     return {
@@ -79,7 +79,7 @@ export class LOTPCrypto {
           iv: iv.buffer as ArrayBuffer,
         },
         key,
-        encryptedPayload.ciphertext.buffer as ArrayBuffer
+        encryptedPayload.ciphertext.slice().buffer as ArrayBuffer
       );
       return new Uint8Array(decrypted);
     } catch {
