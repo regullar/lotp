@@ -4,12 +4,12 @@ import { CameraViewfinder } from '../components/CameraViewfinder';
 import { SignalQualityBadge, SignalLevel } from '../components/SignalQualityBadge';
 import { MetricCard } from '../components/MetricCard';
 import { useCamera } from '../hooks/useCamera';
-import { FrameType } from '../protocol/constants';
+import { PROFILES, FrameType } from '../protocol/constants';
 import { ManifestSerializer, SessionManifest } from '../protocol/manifest';
 import { LTPeelingDecoder } from '../protocol/fountain/peeling';
 import { LOTPContainer, ContainerFile } from '../protocol/container/lotpContainer';
 import { LOTPCrypto } from '../protocol/crypto/aesgcm';
-import { Quadrilateral } from '../optical/detector/cornerDetector';
+import type { Quadrilateral } from '../optical/detector/cornerDetector';
 import { useI18n } from '../hooks/useI18n';
 import { Camera, CheckCircle2, Download, AlertTriangle, ArrowLeft } from 'lucide-react';
 
@@ -20,6 +20,9 @@ interface ReceivePageProps {
 export const ReceivePage: React.FC<ReceivePageProps> = ({ setActiveTab }) => {
   const { t } = useI18n();
   const { stream, error, videoRef, startCamera, stopCamera } = useCamera();
+
+  const [selectedProfile, setSelectedProfile] = useState<string>('reliable');
+  const profile = PROFILES[selectedProfile] || PROFILES.reliable;
 
   const [isScanning, setIsScanning] = useState<boolean>(false);
   const [quad, setQuad] = useState<Quadrilateral | null>(null);
@@ -170,10 +173,10 @@ export const ReceivePage: React.FC<ReceivePageProps> = ({ setActiveTab }) => {
         const imgData = ctx.getImageData(0, 0, 640, 480);
         workerRef.current?.postMessage({
           imageData: imgData,
-          rows: 16,
-          cols: 16,
-          paletteMode: 0,
-          rsEccBytes: 8,
+          rows: profile.gridRows,
+          cols: profile.gridCols,
+          paletteMode: profile.paletteMode,
+          rsEccBytes: profile.rsEccBytes,
         });
       }
 
@@ -184,7 +187,7 @@ export const ReceivePage: React.FC<ReceivePageProps> = ({ setActiveTab }) => {
     return () => {
       if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
     };
-  }, [isScanning, videoRef]);
+  }, [isScanning, videoRef, profile]);
 
   return (
     <div className="max-w-4xl mx-auto py-6 px-4 space-y-6">
@@ -202,9 +205,25 @@ export const ReceivePage: React.FC<ReceivePageProps> = ({ setActiveTab }) => {
           </div>
           <div>
             <h2 className="text-xl font-bold text-white mb-2">{t.receiveFile}</h2>
-            <p className="text-xs text-neutral-400 max-w-md mx-auto">
+            <p className="text-xs text-neutral-400 max-w-md mx-auto mb-4">
               Allow camera access to align and decode the optical matrix feed from the sender device.
             </p>
+
+            {/* Profile Picker for Receiver */}
+            <div className="flex items-center justify-center gap-2 max-w-xs mx-auto text-xs font-mono mb-4">
+              <span className="text-neutral-400">Scanner Profile:</span>
+              <select
+                value={selectedProfile}
+                onChange={(e) => setSelectedProfile(e.target.value)}
+                className="bg-neutral-950 text-emerald-400 border border-neutral-800 rounded-lg px-2.5 py-1 font-bold outline-none cursor-pointer"
+              >
+                {Object.values(PROFILES).slice(0, 3).map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name} ({p.gridRows}x{p.gridCols})
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
 
           {error && (
