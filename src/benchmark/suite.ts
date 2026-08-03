@@ -25,18 +25,18 @@ export class BenchmarkSuite {
     }
 
     const startTime = performance.now();
-    const encoder = new LTEncoder(testData, profile.fountainBlockSize);
+    const encoder = new LTEncoder(testData, profile.fountainBlockSize, 1);
     const encodingTimeMs = performance.now() - startTime;
 
-    const K = encoder.getK();
-    const decoder = new LTPeelingDecoder(K, profile.fountainBlockSize, testData.length);
+    const K = encoder.blockCount;
+    const decoder = new LTPeelingDecoder(K, profile.fountainBlockSize, 1, testData.length);
 
     let symbolId = 0;
     const recStart = performance.now();
-    while (!decoder.isComplete() && symbolId < K * 2) {
-      const sym = encoder.generateSymbol(symbolId);
+    while (!decoder.isComplete && symbolId < K * 5) {
+      const block = encoder.encode(symbolId);
       if (symbolId % 10 !== 7) {
-        decoder.addSymbol(sym);
+        decoder.addFrame(symbolId, block);
       }
       symbolId++;
     }

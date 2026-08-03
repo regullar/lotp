@@ -1,77 +1,103 @@
 import { describe, expect, it } from 'vitest';
-import { FrameType, PaletteMode } from '../protocol/constants';
-import { LTEncoder } from '../protocol/fountain/ltcode';
-import { LTPeelingDecoder } from '../protocol/fountain/peeling';
+import { readFileSync } from 'node:fs';
+import QRCode from 'qrcode';
+import { prepareZXingModule, readBarcodes } from 'zxing-wasm/reader';
+import { PaletteMode } from '../protocol/constants';
+import { LTDecoder, LTEncoder } from '../protocol/fountain/fountain';
 import { ManifestSerializer } from '../protocol/manifest';
-import { TilePacker } from '../protocol/tile';
 import { LOTPContainer } from '../protocol/container/lotpContainer';
-import { FrameBuilder } from '../protocol/frame';
-import { decodeQRFrame, encodeQRFrame } from '../protocol/qrFrame';
+import {
+  fnv1a,
+  packTransportFrame,
+  parseTransportFrame,
+  transportIdentity,
+} from '../protocol/transportFrame';
 
 describe('receiver recovery pipeline', () => {
-  it('round-trips a complete LOTP frame through the QR text envelope', () => {
-    const payload = Uint8Array.from({ length: 16 }, (_, index) => index * 7);
-    const headerBytes = FrameBuilder.packHeader(FrameType.DATA, 42, 1, PaletteMode.MONO_1BIT);
-    const tileBytes = TilePacker.packTile(0, 42, 3, payload, 4);
-    const decodedBytes = decodeQRFrame(encodeQRFrame(headerBytes, tileBytes))!;
+  it('decodes the exact raw QR bytes produced by the sender with ZXing WASM', async () => {
+    const frame = Uint8Array.from({ length: 148 }, (_, index) => (index * 37) & 0xff);
+    prepareZXingModule({
+      overrides: {
+        wasmBinary: readFileSync(new URL('../../node_modules/zxing-wasm/dist/reader/zxing_reader.wasm', import.meta.url)),
+      },
+    });
+    const segment = { data: frame, mode: 'byte' } as unknown as QRCode.QRCodeSegment;
+    const png = await QRCode.toBuffer([segment], {
+      errorCorrectionLevel: 'M',
+      margin: 4,
+      width: 512,
+    });
+    const decoded = await readBarcodes(png, { formats: ['QRCode'], maxNumberOfSymbols: 1 });
 
-    expect(FrameBuilder.unpackHeader(decodedBytes.subarray(0, 11))?.frameSeq).toBe(42);
-    expect(TilePacker.unpackTile(decodedBytes.subarray(11), 4, payload.length)?.payload).toEqual(payload);
-    expect(decodeQRFrame('https://example.com')).toBeNull();
+    expect(decoded[0]?.isValid).toBe(true);
+    expect(decoded[0]?.bytes).toEqual(frame);
   });
 
-  it('reassembles the manifest and fountain data from padded optical frames', async () => {
-    const source = Uint8Array.from({ length: 113 }, (_, index) => (index * 29 + 11) & 0xff);
-    const blockSize = 16;
-    const rsEccBytes = 4;
-    const encoder = new LTEncoder(source, blockSize);
-    const fileData = source.subarray(0, 20);
+  it('recovers a real container from self-describing QR frames in any order', async () => {
+    const fileData = Uint8Array.from({ length: 1537 }, (_, index) => (index * 29 + 11) & 0xff);
+    const file = new File([fileData], 'test.bin', {
+      type: 'application/octet-stream',
+      lastModified: 1234,
+    });
+    const container = await LOTPContainer.pack([{ file, data: fileData }]);
+    const blockSize = 128;
     const manifest = await ManifestSerializer.create(
-      'test',
-      [{ file: new File([fileData], 'test.bin'), data: fileData }],
-      source,
+      '77',
+      [{ file, data: fileData }],
+      container,
       blockSize,
       'reliable',
       PaletteMode.MONO_1BIT,
-      true,
-      { saltHex: '01'.repeat(16), noncePrefixHex: '02'.repeat(8) }
     );
-    expect(manifest.totalSize).toBe(source.length);
+    const manifestBytes = ManifestSerializer.encode(manifest);
+    const transport = new Uint8Array(manifestBytes.length + container.length);
+    transport.set(manifestBytes);
+    transport.set(container, manifestBytes.length);
 
-    const manifestPayloads = ManifestSerializer.fragment(ManifestSerializer.encode(manifest), blockSize);
-    const receivedFragments = manifestPayloads.map((payload, index) => {
-      const tile = TilePacker.packTile(0, index, index, payload, rsEccBytes);
-      const paddedFrame = new Uint8Array(tile.length + 9);
-      paddedFrame.set(tile);
-      return TilePacker.unpackTile(paddedFrame, rsEccBytes, blockSize)!.payload;
-    });
-    const receivedManifest = ManifestSerializer.decode(ManifestSerializer.assemble(receivedFragments)!);
-    expect(receivedManifest?.totalSize).toBe(source.length);
-    expect(receivedManifest?.saltHex).toBe('01'.repeat(16));
-
-    const decoder = new LTPeelingDecoder(
-      receivedManifest!.totalBlocks,
-      receivedManifest!.blockSize,
-      receivedManifest!.totalSize
-    );
-
-    for (let symbolId = 0; !decoder.isComplete() && symbolId < encoder.getK() * 4; symbolId++) {
-      if (symbolId % 7 === 2) continue;
-      const symbol = encoder.generateSymbol(symbolId);
-      const tile = TilePacker.packTile(0, symbolId, symbolId, symbol.data, rsEccBytes);
-      const paddedFrame = new Uint8Array(tile.length + 13);
-      paddedFrame.set(tile);
-      const received = TilePacker.unpackTile(paddedFrame, rsEccBytes, blockSize)!;
-      decoder.addSymbol({
-        ...LTEncoder.getSymbolMetadata(received.symbolId, decoder.getTotalBlocks()),
-        data: received.payload,
-      });
+    const encoder = new LTEncoder(transport, blockSize, 77);
+    const hash = fnv1a(transport);
+    const captured: Uint8Array[] = [];
+    for (let sequence = 23; sequence < 23 + encoder.blockCount * 8; sequence++) {
+      if (sequence % 5 === 1) continue;
+      captured.push(packTransportFrame({
+        sessionId: 77,
+        sequence,
+        blockCount: encoder.blockCount,
+        blockSize,
+        totalSize: transport.length,
+        payloadHash: hash,
+      }, encoder.encode(sequence)));
     }
 
-    expect(decoder.isComplete()).toBe(true);
-    expect(decoder.reconstruct()).toEqual(source);
+    let decoder: LTDecoder | null = null;
+    let identity = '';
+    for (const encodedFrame of captured.reverse()) {
+      const parsed = parseTransportFrame(encodedFrame)!;
+      const nextIdentity = transportIdentity(parsed.header);
+      if (!decoder || identity !== nextIdentity) {
+        decoder = new LTDecoder(
+          parsed.header.blockCount,
+          parsed.header.blockSize,
+          parsed.header.sessionId,
+          parsed.header.totalSize,
+        );
+        identity = nextIdentity;
+      }
+      decoder.addFrame(parsed.header.sequence, parsed.block);
+      if (decoder.isComplete) break;
+    }
 
-    const parent = Uint8Array.from([255, ...source.subarray(0, 20), 254]);
-    expect(await LOTPContainer.calcSHA256(parent.subarray(1, -1))).toBe(await LOTPContainer.calcSHA256(fileData));
+    expect(decoder?.isComplete).toBe(true);
+    const restoredTransport = decoder!.reconstruct()!;
+    expect(fnv1a(restoredTransport)).toBe(hash);
+    const restoredManifest = ManifestSerializer.decode(restoredTransport)!;
+    const restoredFiles = await LOTPContainer.unpack(restoredTransport.subarray(16));
+    expect(restoredManifest.totalSize).toBe(container.length);
+    expect(restoredFiles[0].name).toBe('test.bin');
+    expect(restoredFiles[0].data).toEqual(fileData);
+  });
+
+  it('rejects unrelated or truncated QR payloads', () => {
+    expect(parseTransportFrame(new Uint8Array([1, 2, 3]))).toBeNull();
   });
 });

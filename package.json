@@ -18,12 +18,12 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@zxing/browser": "^0.2.1",
     "canvas-confetti": "^1.9.4",
     "lucide-react": "^1.28.0",
     "qrcode": "^1.5.4",
     "react": "^19.2.8",
-    "react-dom": "^19.2.8"
+    "react-dom": "^19.2.8",
+    "zxing-wasm": "^2.2.4"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.3",

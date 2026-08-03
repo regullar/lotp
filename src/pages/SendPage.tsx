@@ -2,12 +2,11 @@ import React, { useState, useEffect, useRef } from 'react';
 import { FileSelector } from '../components/FileSelector';
 import { OpticalMatrixCanvas } from '../components/OpticalMatrixCanvas';
 import { MetricCard } from '../components/MetricCard';
-import { PROFILES, FrameType, PaletteMode } from '../protocol/constants';
+import { PROFILES, PaletteMode } from '../protocol/constants';
 import { LOTPContainer } from '../protocol/container/lotpContainer';
 import { ManifestSerializer } from '../protocol/manifest';
 import { LTEncoder } from '../protocol/fountain/ltcode';
-import { FrameBuilder } from '../protocol/frame';
-import { TilePacker } from '../protocol/tile';
+import { fnv1a, packTransportFrame } from '../protocol/transportFrame';
 import { LOTPCrypto } from '../protocol/crypto/aesgcm';
 import { useI18n } from '../hooks/useI18n';
 import { Play, Pause, Maximize2, ShieldAlert, ArrowLeft } from 'lucide-react';
@@ -26,6 +25,7 @@ export const SendPage: React.FC<SendPageProps> = ({ setActiveTab }) => {
   const [isTransmitting, setIsTransmitting] = useState<boolean>(false);
   const [isPaused, setIsPaused] = useState<boolean>(false);
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
+  const [transmissionError, setTransmissionError] = useState<string | null>(null);
 
   const [symbolId, setSymbolId] = useState<number>(0);
   const [totalK, setTotalK] = useState<number>(0);
@@ -33,12 +33,12 @@ export const SendPage: React.FC<SendPageProps> = ({ setActiveTab }) => {
   const [avgSpeedBps, setAvgSpeedBps] = useState<number>(0);
   const [elapsedSec, setElapsedSec] = useState<number>(0);
 
-  const [headerData, setHeaderData] = useState<Uint8Array>(() => new Uint8Array(11));
-  const [tilesData, setTilesData] = useState<Uint8Array[]>([]);
+  const [frameData, setFrameData] = useState<Uint8Array>(() => new Uint8Array());
 
   const encoderRef = useRef<LTEncoder | null>(null);
-  const manifestChunksRef = useRef<Uint8Array[]>([]);
-  const manifestChunkIndexRef = useRef<number>(0);
+  const sessionIdRef = useRef<number>(0);
+  const payloadHashRef = useRef<number>(0);
+  const totalSizeRef = useRef<number>(0);
   const animFrameRef = useRef<number | null>(null);
   const lastTimeRef = useRef<number>(0);
   const startTimeRef = useRef<number>(0);
@@ -56,53 +56,63 @@ export const SendPage: React.FC<SendPageProps> = ({ setActiveTab }) => {
 
   const startTransmission = async () => {
     if (files.length === 0) return;
+    setTransmissionError(null);
 
-    const fileItems = await Promise.all(
-      files.map(async (f) => ({
-        file: f,
-        data: new Uint8Array(await f.arrayBuffer()),
-      }))
-    );
+    try {
+      const fileItems = await Promise.all(
+        files.map(async (f) => ({
+          file: f,
+          data: new Uint8Array(await f.arrayBuffer()),
+        }))
+      );
 
-    let containerData = await LOTPContainer.pack(fileItems);
+      let containerData = await LOTPContainer.pack(fileItems);
 
-    let cryptoMeta: { saltHex: string; noncePrefixHex: string } | undefined;
-    if (isEncrypted && password) {
-      const encrypted = await LOTPCrypto.encrypt(containerData, password);
-      containerData = encrypted.ciphertext;
-      cryptoMeta = {
-        saltHex: Array.from(encrypted.salt).map((b) => b.toString(16).padStart(2, '0')).join(''),
-        noncePrefixHex: Array.from(encrypted.noncePrefix).map((b) => b.toString(16).padStart(2, '0')).join(''),
-      };
+      let cryptoMeta: { saltHex: string; noncePrefixHex: string } | undefined;
+      if (isEncrypted && password) {
+        const encrypted = await LOTPCrypto.encrypt(containerData, password);
+        containerData = encrypted.ciphertext;
+        cryptoMeta = {
+          saltHex: Array.from(encrypted.salt).map((b) => b.toString(16).padStart(2, '0')).join(''),
+          noncePrefixHex: Array.from(encrypted.noncePrefix).map((b) => b.toString(16).padStart(2, '0')).join(''),
+        };
+      }
+
+      const sessionId = crypto.getRandomValues(new Uint16Array(1))[0] || 1;
+      const manifest = await ManifestSerializer.create(
+        String(sessionId),
+        fileItems,
+        containerData,
+        profile.fountainBlockSize,
+        profile.id,
+        profile.paletteMode as PaletteMode,
+        isEncrypted,
+        cryptoMeta
+      );
+      const manifestBytes = ManifestSerializer.encode(manifest);
+      const transferData = new Uint8Array(manifestBytes.length + containerData.length);
+      transferData.set(manifestBytes);
+      transferData.set(containerData, manifestBytes.length);
+
+      const encoder = new LTEncoder(transferData, profile.fountainBlockSize, sessionId);
+      if (encoder.blockCount > 0xffff) {
+        throw new Error('Файл слишком большой для этого QR-профиля. Выберите более быстрый профиль.');
+      }
+      encoderRef.current = encoder;
+      sessionIdRef.current = sessionId;
+      payloadHashRef.current = fnv1a(transferData);
+      totalSizeRef.current = transferData.length;
+      setTotalK(encoder.blockCount);
+      setSymbolId(0);
+      frameSeqRef.current = 0;
+
+      startTimeRef.current = performance.now();
+      lastTimeRef.current = performance.now();
+      setIsTransmitting(true);
+      setIsPaused(false);
+    } catch (startError) {
+      setTransmissionError(startError instanceof Error ? startError.message : 'Не удалось подготовить передачу.');
     }
-
-    const sessionId = Math.random().toString(36).substring(2, 18);
-    const manifest = await ManifestSerializer.create(
-      sessionId,
-      fileItems,
-      containerData,
-      profile.fountainBlockSize,
-      profile.id,
-      profile.paletteMode as PaletteMode,
-      isEncrypted,
-      cryptoMeta
-    );
-    manifestChunksRef.current = ManifestSerializer.fragment(
-      ManifestSerializer.encode(manifest),
-      profile.fountainBlockSize
-    );
-    manifestChunkIndexRef.current = 0;
-
-    const encoder = new LTEncoder(containerData, profile.fountainBlockSize);
-    encoderRef.current = encoder;
-    setTotalK(encoder.getK());
-    setSymbolId(0);
-    frameSeqRef.current = 0;
-
-    startTimeRef.current = performance.now();
-    lastTimeRef.current = performance.now();
-    setIsTransmitting(true);
-    setIsPaused(false);
   };
 
   useEffect(() => {
@@ -115,49 +125,18 @@ export const SendPage: React.FC<SendPageProps> = ({ setActiveTab }) => {
       if (delta >= intervalMs) {
         lastTimeRef.current = timestamp;
 
-        frameSeqRef.current++;
-        const currentSeq = frameSeqRef.current;
-
-        const manifestEveryFrames = Math.max(1, Math.round(profile.manifestIntervalMs / intervalMs));
-        const isManifestFrame = manifestChunksRef.current.length > 0
-          && (currentSeq <= manifestChunksRef.current.length || currentSeq % manifestEveryFrames === 1);
-
-        let frameTypeVal: number = FrameType.DATA;
-        let payload: Uint8Array;
-        let tileSymbolId = symbolId;
-
-        if (isManifestFrame) {
-          frameTypeVal = FrameType.MANIFEST;
-          tileSymbolId = manifestChunkIndexRef.current % manifestChunksRef.current.length;
-          payload = manifestChunksRef.current[tileSymbolId];
-          manifestChunkIndexRef.current++;
-        } else if (encoderRef.current) {
-          const currentSymId = symbolId;
-          const sym = encoderRef.current.generateSymbol(currentSymId);
-          payload = sym.data;
-          tileSymbolId = currentSymId;
-          setSymbolId((prev) => prev + 1);
-        } else {
-          payload = new Uint8Array(profile.fountainBlockSize);
-        }
-
-        const header = FrameBuilder.packHeader(
-          frameTypeVal as any,
-          currentSeq,
-          profile.tilesCount,
-          profile.paletteMode as PaletteMode
-        );
-
-        const tile = TilePacker.packTile(
-          0,
-          currentSeq,
-          tileSymbolId,
-          payload,
-          profile.rsEccBytes
-        );
-
-        setHeaderData(header);
-        setTilesData([tile]);
+        const encoder = encoderRef.current;
+        if (!encoder) return;
+        const currentSeq = frameSeqRef.current++;
+        setFrameData(packTransportFrame({
+          sessionId: sessionIdRef.current,
+          sequence: currentSeq,
+          blockCount: encoder.blockCount,
+          blockSize: encoder.blockSize,
+          totalSize: totalSizeRef.current,
+          payloadHash: payloadHashRef.current,
+        }, encoder.encode(currentSeq)));
+        setSymbolId(currentSeq + 1);
 
         const now = performance.now();
         const elapsed = (now - startTimeRef.current) / 1000;
@@ -166,7 +145,7 @@ export const SendPage: React.FC<SendPageProps> = ({ setActiveTab }) => {
         const fps = Math.round(1000 / Math.max(1, delta));
         setCurrentFPS(fps);
 
-        const bytesEmitted = symbolId * profile.fountainBlockSize;
+        const bytesEmitted = (currentSeq + 1) * profile.fountainBlockSize;
         const bps = Math.round(bytesEmitted / Math.max(1, elapsed));
         setAvgSpeedBps(bps);
       }
@@ -179,7 +158,7 @@ export const SendPage: React.FC<SendPageProps> = ({ setActiveTab }) => {
     return () => {
       if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
     };
-  }, [isTransmitting, isPaused, profile, symbolId]);
+  }, [isTransmitting, isPaused, profile]);
 
   const redundancyPercent = totalK > 0 ? Math.round((symbolId / totalK) * 100) : 0;
 
@@ -211,13 +190,17 @@ export const SendPage: React.FC<SendPageProps> = ({ setActiveTab }) => {
             onPasswordChange={setPassword}
             onStart={startTransmission}
           />
+          {transmissionError && (
+            <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-xs text-rose-300">
+              {transmissionError}
+            </div>
+          )}
         </div>
       ) : (
         <div className="space-y-6">
           <div className="bg-neutral-900/90 rounded-3xl border border-neutral-800 p-6 flex flex-col items-center gap-6 shadow-2xl">
             <OpticalMatrixCanvas
-              headerData={headerData}
-              tilesData={tilesData}
+              frameData={frameData}
               isFullscreen={isFullscreen}
             />
 

@@ -4,14 +4,15 @@ import { CameraViewfinder } from '../components/CameraViewfinder';
 import { SignalQualityBadge, SignalLevel } from '../components/SignalQualityBadge';
 import { MetricCard } from '../components/MetricCard';
 import { useCamera } from '../hooks/useCamera';
-import { PROFILES, FrameType } from '../protocol/constants';
-import { BrowserQRCodeReader, type IScannerControls } from '@zxing/browser';
-import { ManifestSerializer, SessionManifest } from '../protocol/manifest';
-import { LTPeelingDecoder } from '../protocol/fountain/peeling';
-import { LTEncoder } from '../protocol/fountain/ltcode';
-import { FrameBuilder } from '../protocol/frame';
-import { TilePacker } from '../protocol/tile';
-import { decodeQRFrame } from '../protocol/qrFrame';
+import { PROFILES } from '../protocol/constants';
+import { ManifestSerializer } from '../protocol/manifest';
+import { LTDecoder } from '../protocol/fountain/fountain';
+import {
+  fnv1a,
+  parseTransportFrame,
+  transportIdentity,
+  type TransportHeader,
+} from '../protocol/transportFrame';
 import { LOTPContainer, ContainerFile } from '../protocol/container/lotpContainer';
 import { LOTPCrypto } from '../protocol/crypto/aesgcm';
 import { useI18n } from '../hooks/useI18n';
@@ -41,7 +42,7 @@ export const ReceivePage: React.FC<ReceivePageProps> = ({ setActiveTab }) => {
   const [signalLevel, setSignalLevel] = useState<SignalLevel>('searching');
 
   // Session state
-  const [decoder, setDecoder] = useState<LTPeelingDecoder | null>(null);
+  const [decoder, setDecoder] = useState<LTDecoder | null>(null);
   const [decryptedPassword, setDecryptedPassword] = useState<string>('');
   const [requiresPassword, setRequiresPassword] = useState<boolean>(false);
   const [recoveryError, setRecoveryError] = useState<string | null>(null);
@@ -56,23 +57,38 @@ export const ReceivePage: React.FC<ReceivePageProps> = ({ setActiveTab }) => {
   const [restoredFiles, setRestoredFiles] = useState<ContainerFile[]>([]);
   const [isCompleted, setIsCompleted] = useState<boolean>(false);
 
-  const scannerControlsRef = useRef<IScannerControls | null>(null);
-  const decoderRef = useRef<LTPeelingDecoder | null>(null);
-  const manifestRef = useRef<SessionManifest | null>(null);
+  const workerBusyRef = useRef<boolean>(false);
+  const decoderRef = useRef<LTDecoder | null>(null);
+  const transportHeaderRef = useRef<TransportHeader | null>(null);
+  const streamKeyRef = useRef<string>('');
   const completedRef = useRef<boolean>(false);
-  const lastFrameSeqRef = useRef<number | null>(null);
   const lastDecodeTimeRef = useRef<number>(0);
   const finishingRef = useRef<boolean>(false);
-  const manifestFragmentsRef = useRef<{ id: number; fragments: Map<number, Uint8Array> } | null>(null);
   const finishReconstructionRef = useRef<() => Promise<void>>(async () => {});
-  const qrHandlerRef = useRef<(text: string) => void>(() => {});
+  const qrHandlerRef = useRef<(bytes: Uint8Array) => void>(() => {});
 
   const finishReconstruction = async () => {
     const currentDecoder = decoderRef.current;
-    const currentManifest = manifestRef.current;
-    if (!currentDecoder || !currentManifest || finishingRef.current) return;
-    const rawContainer = currentDecoder.reconstruct();
-    if (!rawContainer) return;
+    const currentHeader = transportHeaderRef.current;
+    if (!currentDecoder || !currentHeader || finishingRef.current) return;
+    const transportPayload = currentDecoder.reconstruct();
+    if (!transportPayload) return;
+    if (fnv1a(transportPayload) !== currentHeader.payloadHash) {
+      setRecoveryError('Контрольная сумма QR-потока не совпала. Перезапустите передачу.');
+      return;
+    }
+
+    const currentManifest = ManifestSerializer.decode(transportPayload);
+    if (!currentManifest) {
+      setRecoveryError('Манифест восстановленного потока повреждён.');
+      return;
+    }
+    const manifestSize = currentManifest.isEncrypted ? 40 : 16;
+    if (transportPayload.length !== manifestSize + currentManifest.totalSize) {
+      setRecoveryError('Размер восстановленных данных не совпал.');
+      return;
+    }
+    const rawContainer = transportPayload.subarray(manifestSize);
 
     let payloadBytes = rawContainer;
 
@@ -123,78 +139,56 @@ export const ReceivePage: React.FC<ReceivePageProps> = ({ setActiveTab }) => {
     finishReconstructionRef.current = finishReconstruction;
   });
 
-  const handleQRCode = (text: string) => {
-    const frameBytes = decodeQRFrame(text);
-    const matchedProfile = frameBytes && Object.values(PROFILES).find((candidate) =>
-      frameBytes.length === 11 + 14 + candidate.fountainBlockSize + candidate.rsEccBytes
-    );
-    if (!frameBytes || !matchedProfile) {
+  const handleQRCode = (bytes: Uint8Array) => {
+    const parsed = parseTransportFrame(bytes);
+    if (!parsed) {
       setFramesCorrupted((prev) => prev + 1);
       return;
+    }
+    const { header, block } = parsed;
+    const matchedProfile = Object.values(PROFILES).find((candidate) =>
+      candidate.fountainBlockSize === header.blockSize
+    );
+    const identity = transportIdentity(header);
+    if (!decoderRef.current || streamKeyRef.current !== identity) {
+      const nextDecoder = new LTDecoder(
+        header.blockCount,
+        header.blockSize,
+        header.sessionId,
+        header.totalSize,
+      );
+      decoderRef.current = nextDecoder;
+      transportHeaderRef.current = header;
+      streamKeyRef.current = identity;
+      completedRef.current = false;
+      finishingRef.current = false;
+      setDecoder(nextDecoder);
+      setFramesRead(0);
+      setRecoveryProgress(0);
+      setRecoveryError(null);
+      setRequiresPassword(false);
     }
 
-    const header = FrameBuilder.unpackHeader(frameBytes.subarray(0, 11));
-    const tile = TilePacker.unpackTile(
-      frameBytes.subarray(11),
-      matchedProfile.rsEccBytes,
-      matchedProfile.fountainBlockSize
-    );
-    if (!header || !tile || header.frameSeq !== tile.frameSeq || header.paletteMode !== matchedProfile.paletteMode) {
-      setFramesCorrupted((prev) => prev + 1);
-      return;
-    }
-    if (lastFrameSeqRef.current === header.frameSeq) return;
-    lastFrameSeqRef.current = header.frameSeq;
+    const currentDecoder = decoderRef.current;
+    const framesBefore = currentDecoder.framesNew;
+    currentDecoder.addFrame(header.sequence, block);
+    if (currentDecoder.framesNew === framesBefore) return;
 
     const now = performance.now();
     if (lastDecodeTimeRef.current) {
       setCameraFPS(Math.round(1000 / Math.max(1, now - lastDecodeTimeRef.current)));
     }
     lastDecodeTimeRef.current = now;
-    setProfileName(matchedProfile.name);
+    setProfileName(matchedProfile?.name ?? `${header.blockSize} B/frame`);
     setDetected(true);
     setSignalLevel('excellent');
-    setFramesRead((prev) => prev + 1);
+    setFramesRead(currentDecoder.framesNew);
+    const arrivalProgress = currentDecoder.framesNew / Math.max(1, currentDecoder.blockCount * 1.5);
+    const solvedProgress = currentDecoder.solvedCount / currentDecoder.blockCount;
+    setRecoveryProgress(currentDecoder.isComplete ? 100 : Math.min(99, Math.round(Math.max(arrivalProgress, solvedProgress) * 100)));
 
-    if (header.frameType === FrameType.MANIFEST && !manifestRef.current) {
-      const fragmentView = new DataView(tile.payload.buffer, tile.payload.byteOffset, tile.payload.byteLength);
-      const fragmentId = fragmentView.getUint16(0, false);
-      if (manifestFragmentsRef.current?.id !== fragmentId) {
-        manifestFragmentsRef.current = { id: fragmentId, fragments: new Map() };
-      }
-      manifestFragmentsRef.current.fragments.set(tile.payload[3], new Uint8Array(tile.payload));
-
-      const manifestBytes = ManifestSerializer.assemble(Array.from(manifestFragmentsRef.current.fragments.values()));
-      const parsedManifest = manifestBytes ? ManifestSerializer.decode(manifestBytes) : null;
-      if (parsedManifest) {
-        if (parsedManifest.blockSize !== matchedProfile.fountainBlockSize) {
-          setRecoveryError('Некорректный профиль в манифесте.');
-          return;
-        }
-        const peeler = new LTPeelingDecoder(
-          parsedManifest.totalBlocks,
-          parsedManifest.blockSize,
-          parsedManifest.totalSize
-        );
-        manifestRef.current = parsedManifest;
-        decoderRef.current = peeler;
-        setDecoder(peeler);
-        setRequiresPassword(parsedManifest.isEncrypted);
-      }
-      return;
-    }
-
-    const currentDecoder = decoderRef.current;
-    if (header.frameType !== FrameType.DATA || !currentDecoder) return;
-
-    const wasComplete = currentDecoder.isComplete();
-    const finished = currentDecoder.addSymbol({
-      ...LTEncoder.getSymbolMetadata(tile.symbolId, currentDecoder.getTotalBlocks()),
-      data: tile.payload,
-    });
-    setRecoveryProgress(Math.round(currentDecoder.getProgress() * 100));
-
-    if (finished && !wasComplete && !completedRef.current) {
+    if (currentDecoder.isComplete && !completedRef.current) {
+      completedRef.current = true;
       setIsScanning(false);
       void finishReconstructionRef.current();
     }
@@ -207,15 +201,12 @@ export const ReceivePage: React.FC<ReceivePageProps> = ({ setActiveTab }) => {
     const started = await startCamera();
     if (!started) return;
 
-    scannerControlsRef.current?.stop();
-    scannerControlsRef.current = null;
     decoderRef.current = null;
-    manifestRef.current = null;
+    transportHeaderRef.current = null;
+    streamKeyRef.current = '';
     completedRef.current = false;
-    lastFrameSeqRef.current = null;
     lastDecodeTimeRef.current = 0;
     setDecoder(null);
-    manifestFragmentsRef.current = null;
     finishingRef.current = false;
     setProfileName('Автоматически');
     setDetected(false);
@@ -235,26 +226,58 @@ export const ReceivePage: React.FC<ReceivePageProps> = ({ setActiveTab }) => {
     const video = videoRef.current;
     if (!isScanning || !stream || !video) return;
 
+    const worker = new Worker(new URL('../workers/qrDecodeWorker.ts', import.meta.url), { type: 'module' });
+    workerBusyRef.current = false;
     let active = true;
-    const reader = new BrowserQRCodeReader(undefined, {
-      delayBetweenScanAttempts: 50,
-      delayBetweenScanSuccess: 80,
-    });
-    void reader.decodeFromStream(stream, video, (result) => {
-      if (result) qrHandlerRef.current(result.getText());
-    }).then((controls) => {
-      if (active) scannerControlsRef.current = controls;
-      else controls.stop();
-    }).catch((scanError) => {
-      if (active) {
-        setRecoveryError(scanError instanceof Error ? scanError.message : 'Не удалось запустить QR-сканер.');
+    const canvas = document.createElement('canvas');
+    let frameId = 0;
+    const noSignalTimer = window.setTimeout(() => {
+      if (active && !decoderRef.current) {
+        setRecoveryError('Ни один QR-кадр не считан. Включите Reliable QR, поднесите камеру ближе и увеличьте яркость экрана.');
       }
-    });
+    }, 10_000);
+
+    worker.onmessage = (event: MessageEvent) => {
+      const { id, bytes } = event.data as { id: number; bytes: Uint8Array | null };
+      if (id === -1) return;
+      workerBusyRef.current = false;
+      if (bytes) qrHandlerRef.current(bytes);
+    };
+
+    const capture = () => {
+      if (workerBusyRef.current || video.readyState < 2 || !video.videoWidth || !video.videoHeight) return;
+      if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+      }
+      const context = canvas.getContext('2d', { willReadFrequently: true });
+      if (!context) return;
+      context.drawImage(video, 0, 0);
+      const image = context.getImageData(0, 0, canvas.width, canvas.height);
+      workerBusyRef.current = true;
+      worker.postMessage(
+        { id: frameId++, buffer: image.data.buffer, width: canvas.width, height: canvas.height },
+        [image.data.buffer],
+      );
+    };
+
+    const schedule = () => {
+      if (!active) return;
+      const next = () => {
+        if (!active) return;
+        capture();
+        schedule();
+      };
+      if ('requestVideoFrameCallback' in video) video.requestVideoFrameCallback(next);
+      else requestAnimationFrame(next);
+    };
+    schedule();
 
     return () => {
       active = false;
-      scannerControlsRef.current?.stop();
-      scannerControlsRef.current = null;
+      window.clearTimeout(noSignalTimer);
+      worker.terminate();
+      workerBusyRef.current = false;
     };
   }, [isScanning, stream, videoRef]);
 
@@ -336,7 +359,6 @@ export const ReceivePage: React.FC<ReceivePageProps> = ({ setActiveTab }) => {
             <button
               type="button"
               onClick={() => {
-                scannerControlsRef.current?.stop();
                 stopCamera();
                 setIsScanning(false);
               }}
@@ -359,7 +381,7 @@ export const ReceivePage: React.FC<ReceivePageProps> = ({ setActiveTab }) => {
                 placeholder="Пароль шифрования"
                 className="flex-1 rounded-xl bg-neutral-950 border border-neutral-700 px-4 py-3 text-sm text-white outline-none focus:border-cyan-500"
               />
-              {decoder?.isComplete() && (
+              {decoder?.isComplete && (
                 <button
                   type="button"
                   onClick={finishReconstruction}
@@ -396,7 +418,7 @@ export const ReceivePage: React.FC<ReceivePageProps> = ({ setActiveTab }) => {
             <MetricCard label={t.cameraFPS} value={cameraFPS} accent="cyan" />
             <MetricCard label={t.framesRead} value={framesRead} accent="neutral" />
             <MetricCard label={t.framesCorrupted} value={framesCorrupted} accent="rose" />
-            <MetricCard label={t.fountainBlocks} value={`${decoder?.getSolvedCount() || 0}/${decoder?.getTotalBlocks() || 0}`} accent="emerald" />
+            <MetricCard label={t.fountainBlocks} value={`${decoder?.solvedCount || 0}/${decoder?.blockCount || 0}`} accent="emerald" />
           </div>
         </div>
       )}

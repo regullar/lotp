@@ -1,32 +1,30 @@
-import { describe, it, expect } from 'vitest';
-import { LTEncoder } from '../protocol/fountain/ltcode';
-import { LTPeelingDecoder } from '../protocol/fountain/peeling';
+import { describe, expect, it } from 'vitest';
+import { LTDecoder, LTEncoder, frameIndices, solitonCdf } from '../protocol/fountain/fountain';
 
-describe('Systematic LT Fountain Code', () => {
-  it('reconstructs payload despite packet loss', () => {
-    const testData = new Uint8Array(1024);
-    for (let i = 0; i < testData.length; i++) {
-      testData[i] = (i * 13 + 7) & 0xff;
-    }
+describe('robust LT fountain code', () => {
+  it('reconstructs after joining mid-stream with dropped and duplicate frames', () => {
+    const source = Uint8Array.from({ length: 4093 }, (_, index) => (index * 13 + 7) & 0xff);
+    const encoder = new LTEncoder(source, 128, 4242);
+    const decoder = new LTDecoder(encoder.blockCount, encoder.blockSize, encoder.sessionId, source.length);
 
-    const blockSize = 64;
-    const encoder = new LTEncoder(testData, blockSize);
-    const K = encoder.getK();
-    const decoder = new LTPeelingDecoder(K, blockSize, testData.length);
-
-    let symbolId = 0;
-    while (!decoder.isComplete() && symbolId < K * 3) {
-      const sym = encoder.generateSymbol(symbolId);
-      // Simulate 15% random frame drop
-      if (symbolId % 7 !== 2) {
-        decoder.addSymbol(sym);
+    let sequence = encoder.blockCount * 3;
+    const ceiling = sequence + encoder.blockCount * 20;
+    while (!decoder.isComplete && sequence < ceiling) {
+      const block = encoder.encode(sequence);
+      if (sequence % 7 !== 2) {
+        decoder.addFrame(sequence, block);
+        decoder.addFrame(sequence, block);
       }
-      symbolId++;
+      sequence++;
     }
 
-    expect(decoder.isComplete()).toBe(true);
-    const reconstructed = decoder.reconstruct();
-    expect(reconstructed).not.toBeNull();
-    expect(Array.from(reconstructed!)).toEqual(Array.from(testData));
+    expect(decoder.isComplete).toBe(true);
+    expect(decoder.reconstruct()).toEqual(source);
+    expect(decoder.framesDuplicate).toBeGreaterThan(0);
+  });
+
+  it('keeps the wire-level block selection deterministic', () => {
+    expect(frameIndices(17, solitonCdf(17), 4242, 0)).toEqual([3, 14]);
+    expect(frameIndices(179, solitonCdf(179), 4242, 1000)).toEqual([39, 75, 24]);
   });
 });
