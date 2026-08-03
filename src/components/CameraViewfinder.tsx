@@ -16,8 +16,8 @@ export const CameraViewfinder: React.FC<CameraViewfinderProps> = ({ videoRef, qu
     const video = videoRef.current;
     if (!canvas || !video) return;
 
-    canvas.width = video.videoWidth || 640;
-    canvas.height = video.videoHeight || 480;
+    canvas.width = 640;
+    canvas.height = 480;
 
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
@@ -57,13 +57,13 @@ export const CameraViewfinder: React.FC<CameraViewfinderProps> = ({ videoRef, qu
   }, [quad, videoRef]);
 
   return (
-    <div className="relative rounded-2xl overflow-hidden bg-black border border-neutral-800 shadow-2xl aspect-video flex items-center justify-center">
+    <div className="relative rounded-2xl overflow-hidden bg-black border border-neutral-800 shadow-2xl aspect-[4/3] flex items-center justify-center">
       <video
         ref={videoRef as any}
         autoPlay
         playsInline
         muted
-        className="w-full h-full object-cover"
+        className="w-full h-full object-fill"
       />
       <canvas
         ref={overlayCanvasRef}
@@ -72,8 +72,8 @@ export const CameraViewfinder: React.FC<CameraViewfinderProps> = ({ videoRef, qu
 
       {!quad && (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          <div className="w-64 h-64 border-2 border-dashed border-emerald-500/40 rounded-3xl flex items-center justify-center animate-pulse">
-            <div className="w-48 h-48 border border-emerald-500/20 rounded-2xl" />
+          <div className="h-[70%] aspect-square border-2 border-dashed border-emerald-500/40 rounded-3xl flex items-center justify-center animate-pulse">
+            <div className="w-3/4 h-3/4 border border-emerald-500/20 rounded-2xl" />
           </div>
         </div>
       )}

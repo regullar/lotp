@@ -22,35 +22,35 @@ export class CornerDetector {
       gray[i] = (r * 77 + g * 150 + b * 29) >> 8;
     }
 
-    let minX = width, maxX = 0, minY = height, maxY = 0;
+    // ponytail: fixed guide is reliable front-on; add fiducial search only when off-axis scanning is required.
+    const size = Math.floor(Math.min(width, height) * 0.7);
+    const minX = Math.floor((width - size) / 2);
+    const minY = Math.floor((height - size) / 2);
+    const maxX = minX + size;
+    const maxY = minY + size;
     const step = 4;
     let count = 0;
+    let samples = 0;
 
-    for (let y = 10; y < height - 10; y += step) {
-      for (let x = 10; x < width - 10; x += step) {
+    for (let y = minY + step; y < maxY; y += step) {
+      for (let x = minX + step; x < maxX; x += step) {
         const idx = y * width + x;
         const val = gray[idx];
-        const leftVal = gray[idx - step];
-        if (Math.abs(val - leftVal) > 40) {
-          if (x < minX) minX = x;
-          if (x > maxX) maxX = x;
-          if (y < minY) minY = y;
-          if (y > maxY) maxY = y;
-          count++;
-        }
+        if (Math.abs(val - gray[idx - step]) > 40) count++;
+        if (Math.abs(val - gray[idx - step * width]) > 40) count++;
+        samples += 2;
       }
     }
 
-    if (count < 15 || maxX - minX < 50 || maxY - minY < 50) {
-      return null;
-    }
+    const edgeRatio = count / samples;
+    if (edgeRatio < 0.04) return null;
 
     return {
       tl: { x: minX, y: minY },
       tr: { x: maxX, y: minY },
       br: { x: maxX, y: maxY },
       bl: { x: minX, y: maxY },
-      confidence: Math.min(1.0, count / 150),
+      confidence: Math.min(1, edgeRatio / 0.2),
     };
   }
 }
