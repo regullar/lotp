@@ -22,23 +22,45 @@ interface ReceivePageProps {
   setActiveTab: (tab: string) => void;
 }
 
-const downloadFile = (file: ContainerFile) => {
-  const url = URL.createObjectURL(new Blob([file.data.slice().buffer as ArrayBuffer], { type: file.mimeType }));
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = file.name;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
-};
-
 const canPreview = (mimeType: string) => /^(image|audio|video|text)\//.test(mimeType) || mimeType === 'application/pdf';
 
-const previewFile = (file: ContainerFile) => {
-  const url = URL.createObjectURL(new Blob([file.data.slice().buffer as ArrayBuffer], { type: file.mimeType }));
-  window.open(url, '_blank', 'noopener,noreferrer');
-  window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+const RestoredFileActions: React.FC<{
+  file: ContainerFile;
+  openLabel: string;
+  downloadLabel: string;
+}> = ({ file, openLabel, downloadLabel }) => {
+  const [url, setUrl] = useState('');
+  useEffect(() => {
+    const nextUrl = URL.createObjectURL(new Blob([file.data.slice().buffer as ArrayBuffer], { type: file.mimeType }));
+    setUrl(nextUrl);
+    return () => URL.revokeObjectURL(nextUrl);
+  }, [file]);
+
+  if (!url) return null;
+
+  return (
+    <div className="flex items-center gap-2">
+      {canPreview(file.mimeType) && (
+        <a
+          href={url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="px-3 py-2 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-white font-bold text-xs flex items-center gap-1.5 transition-colors"
+        >
+          <Eye className="w-4 h-4" />
+          {openLabel}
+        </a>
+      )}
+      <a
+        href={url}
+        download={file.name}
+        className="px-4 py-2 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-black font-bold text-xs flex items-center gap-1.5 transition-colors"
+      >
+        <Download className="w-4 h-4" />
+        {downloadLabel}
+      </a>
+    </div>
+  );
 };
 
 export const ReceivePage: React.FC<ReceivePageProps> = ({ setActiveTab }) => {
@@ -354,26 +376,7 @@ export const ReceivePage: React.FC<ReceivePageProps> = ({ setActiveTab }) => {
                   <div className="font-semibold text-sm text-white truncate">{file.name}</div>
                   <div className="text-xs text-neutral-400 font-mono">{(file.size / 1024).toFixed(1)} KB</div>
                 </div>
-                <div className="flex items-center gap-2">
-                  {canPreview(file.mimeType) && (
-                    <button
-                      type="button"
-                      onClick={() => previewFile(file)}
-                      className="px-3 py-2 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-white font-bold text-xs flex items-center gap-1.5 transition-colors"
-                    >
-                      <Eye className="w-4 h-4" />
-                      {t.viewFile}
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => downloadFile(file)}
-                    className="px-4 py-2 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-black font-bold text-xs flex items-center gap-1.5 transition-colors"
-                  >
-                    <Download className="w-4 h-4" />
-                    {t.downloadFile}
-                  </button>
-                </div>
+                <RestoredFileActions file={file} openLabel={t.viewFile} downloadLabel={t.downloadFile} />
               </div>
             ))}
           </div>
