@@ -1,32 +1,48 @@
-# React + TypeScript + Vite
+# LumenLink (LOTP v1)
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+**LumenLink** — браузерная система передачи любых файлов с экрана одного устройства на камеру другого устройства без Wi-Fi, Bluetooth, NFC, кабеля, локальной сети и серверной передачи данных.
 
-Currently, two official plugins are available:
+**Автор & Разработчик**: regullar <darin228228@gmail.com>  
+**Репозиторий**: [github.com/regullar/lotp](https://github.com/regullar/lotp)
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+---
 
-## React Compiler
+## ⚡ Особенности
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- **Zero-Server / Offline PWA**: После первоначальной загрузки всё приложение работает 100% локально в браузере. Данные никогда не передаются на внешние серверы.
+- **Собственный оптический протокол LOTP v1**: Использует избыточную визуальную матрицу с 4 уникальными угловыми маркерами (TL, TR, BL, BR), timing-релингом и калибровочной палитрой.
+- **Systematic Luby Transform (LT) Fountain Code**: Поддерживает бесконечный потоковый рендеринг символов и автоматическое восстановление файлов при потере отдельных кадров.
+- **Многоуровневая коррекция ошибок (Reed-Solomon + 2D Interleaving)**: Защищает данные от солнечных бликов, размытия и эффекта rolling shutter.
+- **AES-256-GCM Шифрование**: Поддержка парольного шифрования с KDF PBKDF2/Argon2.
+- **Многопоточный Web Worker**: Компьютерное зрение и гомография DLT (3x3 Homography) выполняются в фоновом потоке со скоростью до 60 FPS.
 
-## Expanding the Oxlint configuration
+---
 
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
+## 🚀 Быстрый запуск
 
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```bash
+# Клонирование репозитория
+git clone https://github.com/regullar/lotp.git
+cd lotp
+
+# Установка зависимостей
+npm install
+
+# Запуск локального dev-сервера (без SSL для MacBook)
+npm run dev
+
+# Запуск с поддержкой HTTPS (для тестирования со смартфона)
+npm run dev:https
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+---
+
+## 🧪 Запуск тестов
+
+```bash
+# Юнит-тесты протокола и симулятор ошибок (Vitest)
+npm run test:unit
+
+# Сборка production версии
+npm run build
+```

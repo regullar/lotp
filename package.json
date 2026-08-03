@@ -1,7 +1,13 @@
 {
   "name": "lotp",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
+  "description": "LumenLink Optical Transport Protocol (LOTP v1) Web Application",
+  "author": "regullar <darin228228@gmail.com>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/regullar/lotp.git"
+  },
   "type": "module",
   "scripts": {
     "dev": "vite",
